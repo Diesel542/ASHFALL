@@ -1,0 +1,32 @@
+{
+  "name": "ashfall",
+  "version": "0.1.0",
+  "description": "A dying settlement. Five people. One secret. Choices that bleed.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "game",
+    "rpg",
+    "isometric",
+    "narrative",
+    "phaser"
+  ],
+  "authors": [
+    "Ronni Holmvig Strøm (Vision)",
+    "Aria (Voice)", 
+    "Logos (Systems)"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "phaser": "^3.70.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

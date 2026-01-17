@@ -1,0 +1,77 @@
+{
+  "id": "sample_conversation",
+  "description": "Example dialogue structure for Ashfall",
+  
+  "nodes": {
+    "start": {
+      "speaker": "THE_LEADER",
+      "text": "You shouldn't be here. No one comes to Ashfall unless they're lost or lying.",
+      "interruptions": [
+        {
+          "skill": "logic",
+          "threshold": 6,
+          "text": "She's testing you. That sentence was rehearsed — she's said it before, to others."
+        },
+        {
+          "skill": "instinct", 
+          "threshold": 4,
+          "text": "Her hand hasn't moved from her belt. She's ready for this to go wrong."
+        }
+      ],
+      "choices": [
+        {
+          "text": "I'm neither. I'm looking for answers.",
+          "next": "direct_approach",
+          "weights": { "truth": 1 }
+        },
+        {
+          "text": "[LIE] I got separated from my group. Just need shelter for the night.",
+          "next": "lie_approach",
+          "check": { "skill": "logic", "difficulty": 8 },
+          "weights": { "deception": 1 }
+        },
+        {
+          "text": "[EMPATHY] You look like you haven't slept in days. What's wrong?",
+          "requires": { "skill": "empathy", "threshold": 7 },
+          "next": "empathy_approach",
+          "weights": { "kindness": 1 }
+        },
+        {
+          "text": "...",
+          "next": "silence",
+          "note": "Sometimes saying nothing says everything"
+        }
+      ]
+    },
+
+    "direct_approach": {
+      "speaker": "THE_LEADER", 
+      "text": "Answers. Everyone wants answers. But the only thing Ashfall has is questions and dust.",
+      "flags_set": ["approached_leader_directly"],
+      "next": "continue_conversation"
+    },
+
+    "lie_approach_success": {
+      "speaker": "THE_LEADER",
+      "text": "...Fine. One night. But you stay where I can see you.",
+      "flags_set": ["lied_to_leader", "has_shelter"],
+      "memory": { "npc": "leader", "content": "You lied to get in. She might not know yet." }
+    },
+
+    "lie_approach_failure": {
+      "speaker": "THE_LEADER",
+      "text": "You're a terrible liar. Which means you're either desperate or stupid. Which is it?",
+      "flags_set": ["caught_lying_to_leader"],
+      "relationship": { "npc": "leader", "delta": -10 },
+      "interruptions": [
+        {
+          "skill": "ghost",
+          "threshold": 5,
+          "text": "You used to be better at this. Before. What happened to you?"
+        }
+      ]
+    }
+  },
+
+  "_comment": "This is a sample. Aria will fill these with blood and poetry."
+}
