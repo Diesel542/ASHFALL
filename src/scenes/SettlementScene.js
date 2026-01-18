@@ -6,6 +6,10 @@ import { UIManager } from '../ui/UIManager.js';
 import { DialogueController } from '../ui/DialogueController.js';
 import { Transitions } from '../ui/Transitions.js';
 import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
+import { QuestNotification } from '../ui/QuestNotification.js';
+import { CurieWhisperPanel } from '../ui/CurieWhisperPanel.js';
+import { CurieGlimpse } from '../ui/CurieGlimpse.js';
+import { CurieManifestationController } from '../systems/CurieManifestationController.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
 import { EVENTS } from '../core/EventBus.js';
@@ -61,6 +65,14 @@ export class SettlementScene extends Phaser.Scene {
     // Save/Load menu
     this.saveLoadMenu = new SaveLoadMenu(this, this.game.save);
 
+    // Quest notification
+    this.questNotification = new QuestNotification(this);
+
+    // Curie manifestation system
+    this.curieController = new CurieManifestationController(this.game.gsm);
+    this.curieWhisper = new CurieWhisperPanel(this);
+    this.curieGlimpse = new CurieGlimpse(this);
+
     // Setup save/load keyboard shortcuts
     this.setupSaveLoadShortcuts();
 
@@ -113,6 +125,32 @@ export class SettlementScene extends Phaser.Scene {
 
     // Dialogue advance (player clicks to continue)
     this.events.on('dialogue:advance', () => this.onDialogueAdvance());
+
+    // Quest events
+    events.on(EVENTS.QUEST_START, (e) => this.onQuestStart(e.data));
+    events.on(EVENTS.QUEST_COMPLETE, (e) => this.onQuestComplete(e.data));
+
+    // NPC seeking player
+    events.on('npc:seeks_player', (e) => this.onNpcSeeksPlayer(e.data));
+
+    // Narrative events (time-based story beats)
+    events.on('narrative:event', (e) => this.onNarrativeEvent(e.data));
+
+    // NPC location updates (after rest or time change)
+    events.on('npcs:locations_updated', () => this.onNpcLocationsUpdated());
+
+    // Curie manifestations
+    events.on('curie:speaks', (e) => this.onCurieSpeaks(e.data));
+
+    // Direct contact with Curie at shaft (C key)
+    this.input.keyboard.on('keydown-C', async () => {
+      if (this.game.gsm.get('player.location') === 'sealed_shaft') {
+        const result = await this.curieController.directContact('I want to understand.');
+        if (!result.success && result.reason) {
+          this.showNarrativeText(result.reason);
+        }
+      }
+    });
   }
 
   // ═══════════════════════════════════════
@@ -331,6 +369,79 @@ export class SettlementScene extends Phaser.Scene {
 
   onDialogueAdvance() {
     // Handle in dialogue controller
+  }
+
+  // ═══════════════════════════════════════
+  // QUEST & NARRATIVE EVENT HANDLERS
+  // ═══════════════════════════════════════
+
+  onQuestStart(data) {
+    // Show quest notification
+    this.questNotification.showQuestStarted(data);
+  }
+
+  onQuestComplete(data) {
+    // Show completion notification
+    this.questNotification.showQuestCompleted(data, data.outcome);
+  }
+
+  onNpcSeeksPlayer(data) {
+    // Show indicator that an NPC wants to talk
+    const npcName = data.npc.charAt(0).toUpperCase() + data.npc.slice(1);
+    this.showNarrativeText(`${npcName} is looking for you.`);
+  }
+
+  onNarrativeEvent(data) {
+    // Show narrative text
+    this.showNarrativeText(data.text);
+  }
+
+  onNpcLocationsUpdated() {
+    // Update the settlement view with new NPC positions
+    if (this.settlement) {
+      this.settlement.updateNpcPositions();
+    }
+    // Update current location panel
+    const location = this.game.gsm.get('player.location');
+    this.onLocationChange({ to: location });
+  }
+
+  async onCurieSpeaks(data) {
+    // Determine duration based on text length and state
+    const baseDuration = 4000;
+    const lengthBonus = (data.text?.length || 0) * 20;
+    const stateBonus = data.state === 'emergent' ? 2000 : 0;
+    const duration = Math.min(baseDuration + lengthBonus + stateBonus, 8000);
+
+    // Try to show subliminal portrait glimpse (40% chance)
+    this.curieGlimpse.tryGlimpse(data.state);
+
+    await this.curieWhisper.show(data.text, data.state, duration);
+  }
+
+  /**
+   * Show narrative text in center of screen
+   */
+  async showNarrativeText(text) {
+    const { width, height } = this.cameras.main;
+
+    const narrativeText = this.add.text(width / 2, height / 2 - 50, text, {
+      fontFamily: 'Lora, serif',
+      fontSize: '18px',
+      color: '#a89a85',
+      fontStyle: 'italic',
+      wordWrap: { width: 600 },
+      align: 'center'
+    });
+    narrativeText.setOrigin(0.5);
+    narrativeText.setAlpha(0);
+    narrativeText.setDepth(1500);
+
+    await this.fadeElement(narrativeText, 1, 500);
+    await this.delay(3000);
+    await this.fadeElement(narrativeText, 0, 400);
+
+    narrativeText.destroy();
   }
 
   // ═══════════════════════════════════════
