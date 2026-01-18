@@ -19,30 +19,11 @@ export class BootScene extends Phaser.Scene {
     this.createLoadingBar();
 
     // ═══════════════════════════════════════
-    // PORTRAITS
+    // PORTRAITS (generated as placeholders)
     // ═══════════════════════════════════════
 
-    const portraits = [
-      'mara_guarded',
-      'mara_commanding',
-      'mara_cracking',
-      'jonas_distant',
-      'jonas_pained',
-      'jonas_warmth',
-      'rask_watching',
-      'rask_warning',
-      'rask_softness',
-      'edda_cryptic',
-      'edda_frightened',
-      'edda_prophetic',
-      'kale_eager',
-      'kale_confused',
-      'kale_slipping'
-    ];
-
-    portraits.forEach((portrait) => {
-      this.load.image(portrait, `assets/portraits/${portrait}.png`);
-    });
+    // Portraits are now generated programmatically in createParticleTextures()
+    // to allow testing without actual image assets
 
     // ═══════════════════════════════════════
     // TILES (if using tilemap)
@@ -73,6 +54,9 @@ export class BootScene extends Phaser.Scene {
 
     // Create simple particle textures programmatically
     this.createParticleTextures();
+
+    // Create portrait placeholders
+    this.createPortraitPlaceholders();
   }
 
   createLoadingBar() {
@@ -162,6 +146,140 @@ export class BootScene extends Phaser.Scene {
     npcGraphics.fillCircle(16, 12, 8);
     npcGraphics.generateTexture('npc', 32, 48);
     npcGraphics.destroy();
+  }
+
+  createPortraitPlaceholders() {
+    // NPC colors for portrait backgrounds
+    const npcColors = {
+      mara: 0x8b4513, // Saddle brown - leader
+      jonas: 0x4a6741, // Forest green - healer
+      rask: 0x5c4033, // Dark brown - enforcer
+      edda: 0x4a4a6a, // Muted purple - elder
+      kale: 0x6a5a4a // Taupe - mirror
+    };
+
+    // Mood tints (subtle color shifts)
+    const moodTints = {
+      // Mara
+      guarded: 0x000000,
+      commanding: 0x110000,
+      cracking: 0x001100,
+      // Jonas
+      distant: 0x000011,
+      pained: 0x110000,
+      warmth: 0x111100,
+      // Rask
+      watching: 0x000000,
+      warning: 0x110000,
+      softness: 0x001111,
+      // Edda
+      cryptic: 0x000011,
+      frightened: 0x110011,
+      prophetic: 0x111111,
+      // Kale
+      eager: 0x111100,
+      confused: 0x110011,
+      slipping: 0x001111
+    };
+
+    const portraits = [
+      { name: 'mara_guarded', npc: 'mara', mood: 'guarded' },
+      { name: 'mara_commanding', npc: 'mara', mood: 'commanding' },
+      { name: 'mara_cracking', npc: 'mara', mood: 'cracking' },
+      { name: 'jonas_distant', npc: 'jonas', mood: 'distant' },
+      { name: 'jonas_pained', npc: 'jonas', mood: 'pained' },
+      { name: 'jonas_warmth', npc: 'jonas', mood: 'warmth' },
+      { name: 'rask_watching', npc: 'rask', mood: 'watching' },
+      { name: 'rask_warning', npc: 'rask', mood: 'warning' },
+      { name: 'rask_softness', npc: 'rask', mood: 'softness' },
+      { name: 'edda_cryptic', npc: 'edda', mood: 'cryptic' },
+      { name: 'edda_frightened', npc: 'edda', mood: 'frightened' },
+      { name: 'edda_prophetic', npc: 'edda', mood: 'prophetic' },
+      { name: 'kale_eager', npc: 'kale', mood: 'eager' },
+      { name: 'kale_confused', npc: 'kale', mood: 'confused' },
+      { name: 'kale_slipping', npc: 'kale', mood: 'slipping' }
+    ];
+
+    // Portrait dimensions
+    const width = 128;
+    const height = 160;
+
+    portraits.forEach(({ name, npc, mood }) => {
+      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+
+      // Background color with mood tint
+      const baseColor = npcColors[npc];
+      const tint = moodTints[mood];
+      const finalColor = this.blendColors(baseColor, tint);
+
+      // Fill background
+      graphics.fillStyle(finalColor, 1);
+      graphics.fillRect(0, 0, width, height);
+
+      // Add subtle border
+      graphics.lineStyle(2, 0x1a1714, 1);
+      graphics.strokeRect(1, 1, width - 2, height - 2);
+
+      // Add a darker inner rectangle for depth
+      graphics.fillStyle(0x000000, 0.2);
+      graphics.fillRect(8, 8, width - 16, height - 16);
+
+      // Add character initial circle
+      const initial = npc.charAt(0).toUpperCase();
+      graphics.fillStyle(0xe8dcc8, 0.9);
+      graphics.fillCircle(width / 2, height / 2 - 10, 30);
+
+      // Generate texture
+      graphics.generateTexture(name, width, height);
+      graphics.destroy();
+
+      // Add text overlay for initial (using a separate texture with text)
+      this.createInitialOverlay(name, initial, width, height);
+    });
+  }
+
+  createInitialOverlay(baseName, initial, width, height) {
+    // Create a render texture to combine graphics with text
+    const rt = this.make.renderTexture({ x: 0, y: 0, width, height, add: false });
+
+    // Draw the base portrait
+    rt.draw(baseName, 0, 0);
+
+    // Add text for the initial
+    const text = this.add.text(width / 2, height / 2 - 10, initial, {
+      fontFamily: 'Oswald, sans-serif',
+      fontSize: '32px',
+      color: '#2d2a26',
+      fontStyle: 'bold'
+    });
+    text.setOrigin(0.5);
+
+    // Draw text onto render texture
+    rt.draw(text, 0, 0);
+
+    // Save as the final portrait texture (overwrite)
+    rt.saveTexture(baseName);
+
+    // Clean up
+    text.destroy();
+    rt.destroy();
+  }
+
+  blendColors(base, tint) {
+    // Simple additive blend
+    const r1 = (base >> 16) & 0xff;
+    const g1 = (base >> 8) & 0xff;
+    const b1 = base & 0xff;
+
+    const r2 = (tint >> 16) & 0xff;
+    const g2 = (tint >> 8) & 0xff;
+    const b2 = tint & 0xff;
+
+    const r = Math.min(255, r1 + r2);
+    const g = Math.min(255, g1 + g2);
+    const b = Math.min(255, b1 + b2);
+
+    return (r << 16) | (g << 8) | b;
   }
 
   create() {
