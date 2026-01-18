@@ -1,15 +1,25 @@
 // ASHFALL - Dialogue Scene
 // Conversations with memory, consequences, and voices that speak
+// Now with LLM-driven dynamic dialogue for supported NPCs
+
+import { AgentRunner } from '../systems/AgentRunner.js';
+import { hasAPIKey, promptForAPIKey } from '../config/api.js';
 
 export class DialogueScene extends Phaser.Scene {
     constructor() {
         super({ key: 'DialogueScene' });
-        
+
         this.npcId = null;
         this.npcName = null;
         this.currentNode = null;
         this.dialogueData = null;
-        
+
+        // Agent system
+        this.agentRunner = null;
+        this.useDynamicDialogue = false;
+        this.isWaitingForResponse = false;
+        this.hasPromptedForKey = false;
+
         // Voice colors
         this.voiceColors = {
             logic: '#88ccff',
@@ -17,7 +27,7 @@ export class DialogueScene extends Phaser.Scene {
             empathy: '#88ff88',
             ghost: '#cc88ff'
         };
-        
+
         this.voiceNames = {
             logic: 'LOGIC',
             instinct: 'INSTINCT',
@@ -29,15 +39,16 @@ export class DialogueScene extends Phaser.Scene {
     init(data) {
         this.npcId = data.npcId;
         this.npcName = data.npcName;
+        this.isWaitingForResponse = false;
     }
 
     create() {
         const width = this.cameras.main.width;
         const height = this.cameras.main.height;
-        
+
         // Semi-transparent background
         this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
-        
+
         // Dialogue box
         this.dialogueBox = this.add.rectangle(
             width / 2,
@@ -47,14 +58,21 @@ export class DialogueScene extends Phaser.Scene {
             0x1a1a1a,
             0.95
         ).setStrokeStyle(2, 0xc4a77d);
-        
+
         // NPC name
         this.nameText = this.add.text(70, height - 260, this.npcName, {
             fontFamily: 'Courier New',
             fontSize: '18px',
             color: '#c4a77d'
         });
-        
+
+        // Dynamic dialogue indicator
+        this.dynamicIndicator = this.add.text(width - 70, height - 260, '', {
+            fontFamily: 'Courier New',
+            fontSize: '12px',
+            color: '#666666'
+        }).setOrigin(1, 0);
+
         // Dialogue text
         this.dialogueText = this.add.text(70, height - 220, '', {
             fontFamily: 'Courier New',
@@ -62,25 +80,261 @@ export class DialogueScene extends Phaser.Scene {
             color: '#ffffff',
             wordWrap: { width: width - 150 }
         });
-        
+
         // Choices container
         this.choicesContainer = this.add.container(70, height - 150);
-        
+
         // Voice interruption area (above dialogue box)
         this.voiceContainer = this.add.container(width / 2, height - 300);
-        
+        this.voiceYOffset = 0;
+
+        // Loading indicator (hidden by default)
+        this.loadingText = null;
+
+        // Initialize agent runner
+        this.agentRunner = new AgentRunner();
+
         // Load dialogue for this NPC
         this.loadDialogue();
     }
 
-    loadDialogue() {
-        // For now, use placeholder dialogue
-        // Aria will fill these with real content
-        this.dialogueData = this.getPlaceholderDialogue(this.npcId);
-        
-        // Start at the beginning
-        this.showNode('start');
+    async loadDialogue() {
+        // Check if this NPC supports dynamic dialogue
+        const canUseDynamic = this.agentRunner.canUseAgent(this.npcId);
+
+        if (canUseDynamic) {
+            this.useDynamicDialogue = true;
+            this.dynamicIndicator.setText('[DYNAMIC]');
+            this.dynamicIndicator.setColor('#88ff88');
+
+            // Start dynamic conversation
+            await this.startDynamicConversation();
+        } else if (this.agentRunner.agents && this.npcId === 'keeper' && !hasAPIKey()) {
+            // Edda supports dynamic but no API key - offer to set one
+            if (!this.hasPromptedForKey) {
+                this.hasPromptedForKey = true;
+                const enabled = await promptForAPIKey();
+                if (enabled) {
+                    this.useDynamicDialogue = true;
+                    this.dynamicIndicator.setText('[DYNAMIC]');
+                    this.dynamicIndicator.setColor('#88ff88');
+                    await this.startDynamicConversation();
+                    return;
+                }
+            }
+            // Fall back to static
+            this.useDynamicDialogue = false;
+            this.dynamicIndicator.setText('[STATIC]');
+            this.dynamicIndicator.setColor('#666666');
+            this.dialogueData = this.getPlaceholderDialogue(this.npcId);
+            this.showNode('start');
+        } else {
+            // Use static dialogue
+            this.useDynamicDialogue = false;
+            this.dynamicIndicator.setText('[STATIC]');
+            this.dynamicIndicator.setColor('#666666');
+            this.dialogueData = this.getPlaceholderDialogue(this.npcId);
+            this.showNode('start');
+        }
     }
+
+    async startDynamicConversation() {
+        this.showLoadingIndicator();
+
+        try {
+            const response = await this.agentRunner.runConversation(
+                this.npcId,
+                null,
+                true // isOpening
+            );
+
+            this.hideLoadingIndicator();
+
+            // Display the opening
+            await this.displayDynamicResponse(response);
+        } catch (error) {
+            console.error('Failed to start dynamic conversation:', error);
+            this.hideLoadingIndicator();
+
+            // Fall back to static
+            this.useDynamicDialogue = false;
+            this.dynamicIndicator.setText('[STATIC]');
+            this.dynamicIndicator.setColor('#666666');
+            this.dialogueData = this.getPlaceholderDialogue(this.npcId);
+            this.showNode('start');
+        }
+    }
+
+    async handleDynamicChoice(choiceText, choiceType) {
+        if (this.isWaitingForResponse) return;
+
+        // Handle leave/withdrawal
+        if (choiceType === 'withdrawal' || choiceText === '[Leave]') {
+            this.closeDialogue();
+            return;
+        }
+
+        this.isWaitingForResponse = true;
+        this.showLoadingIndicator();
+
+        // Record the action
+        window.ASHFALL.recordAction({
+            type: 'dialogue_choice',
+            npc: this.npcId,
+            choice: choiceText,
+            weights: {}
+        });
+
+        try {
+            const response = await this.agentRunner.runConversation(
+                this.npcId,
+                choiceText,
+                false
+            );
+
+            this.hideLoadingIndicator();
+            await this.displayDynamicResponse(response);
+        } catch (error) {
+            console.error('Dynamic dialogue error:', error);
+            this.hideLoadingIndicator();
+
+            // Show error state
+            this.dialogueText.setText('*The moment passes in silence.*');
+            this.displayDynamicChoices([
+                { text: '[Leave]', type: 'withdrawal', skill_hint: null }
+            ]);
+        }
+
+        this.isWaitingForResponse = false;
+    }
+
+    async displayDynamicResponse(response) {
+        // Clear previous content
+        this.voiceContainer.removeAll(true);
+        this.choicesContainer.removeAll(true);
+        this.voiceYOffset = 0;
+
+        // Show voice interrupts first (with delay between each)
+        if (response.voiceInterrupts && response.voiceInterrupts.length > 0) {
+            for (const interrupt of response.voiceInterrupts) {
+                await this.displayVoiceInterrupt(interrupt);
+                await this.delay(300);
+            }
+        }
+
+        // Show NPC dialogue
+        this.dialogueText.setText(response.dialogue);
+
+        // Show choices after a brief delay
+        await this.delay(400);
+        this.displayDynamicChoices(response.choices);
+    }
+
+    async displayVoiceInterrupt(interrupt) {
+        const text = this.add.text(
+            0,
+            this.voiceYOffset,
+            `[${interrupt.voice}] ${interrupt.text}`,
+            {
+                fontFamily: 'Courier New',
+                fontSize: '14px',
+                color: interrupt.color,
+                fontStyle: 'italic',
+                wordWrap: { width: this.cameras.main.width - 200 }
+            }
+        ).setOrigin(0.5, 0);
+
+        this.voiceContainer.add(text);
+        this.voiceYOffset += text.height + 10;
+
+        // Fade in effect
+        text.setAlpha(0);
+        this.tweens.add({
+            targets: text,
+            alpha: 1,
+            duration: 200
+        });
+    }
+
+    displayDynamicChoices(choices) {
+        this.choicesContainer.removeAll(true);
+        let yOffset = 0;
+
+        choices.forEach((choice) => {
+            // Add skill hint indicator if present
+            let displayText = `> ${choice.text}`;
+            if (choice.skill_hint && choice.skill_hint !== 'null') {
+                const color = this.voiceColors[choice.skill_hint.toLowerCase()];
+                if (color) {
+                    displayText = `> [${choice.skill_hint}] ${choice.text}`;
+                }
+            }
+
+            const choiceText = this.add.text(0, yOffset, displayText, {
+                fontFamily: 'Courier New',
+                fontSize: '14px',
+                color: '#888888'
+            }).setInteractive();
+
+            choiceText.on('pointerover', () => {
+                choiceText.setColor('#c4a77d');
+            });
+
+            choiceText.on('pointerout', () => {
+                choiceText.setColor('#888888');
+            });
+
+            choiceText.on('pointerdown', () => {
+                this.handleDynamicChoice(choice.text, choice.type);
+            });
+
+            this.choicesContainer.add(choiceText);
+            yOffset += 25;
+        });
+    }
+
+    showLoadingIndicator() {
+        if (!this.loadingText) {
+            this.loadingText = this.add.text(
+                this.cameras.main.width / 2,
+                this.cameras.main.height / 2 - 50,
+                '...',
+                {
+                    fontFamily: 'Courier New',
+                    fontSize: '24px',
+                    color: '#c4a77d'
+                }
+            ).setOrigin(0.5);
+
+            // Animate the dots
+            this.loadingTween = this.tweens.add({
+                targets: this.loadingText,
+                alpha: 0.3,
+                duration: 500,
+                yoyo: true,
+                repeat: -1
+            });
+        }
+    }
+
+    hideLoadingIndicator() {
+        if (this.loadingText) {
+            if (this.loadingTween) {
+                this.loadingTween.stop();
+            }
+            this.loadingText.destroy();
+            this.loadingText = null;
+            this.loadingTween = null;
+        }
+    }
+
+    delay(ms) {
+        return new Promise(resolve => this.time.delayedCall(ms, resolve));
+    }
+
+    // ========================================
+    // STATIC DIALOGUE SYSTEM (FALLBACK)
+    // ========================================
 
     getPlaceholderDialogue(npcId) {
         // Placeholder dialogues - Aria will replace these
@@ -172,7 +426,7 @@ export class DialogueScene extends Phaser.Scene {
                     ]
                 }
             },
-            
+
             healer: {
                 start: {
                     text: "*She doesn't look up from her work.* If you're hurt, sit. If you're not, go away.",
@@ -245,7 +499,7 @@ export class DialogueScene extends Phaser.Scene {
                     ]
                 }
             },
-            
+
             threat: {
                 start: {
                     text: "*He sees you approaching and laughs—a sound like breaking glass.* Another one. Come to see the monster?",
@@ -322,7 +576,7 @@ export class DialogueScene extends Phaser.Scene {
                     ]
                 }
             },
-            
+
             keeper: {
                 start: {
                     text: "*She smiles warmly, but the smile doesn't reach her eyes.* A new face. How lovely. What brings you to our little corner of nowhere?",
@@ -385,7 +639,7 @@ export class DialogueScene extends Phaser.Scene {
                     ]
                 }
             },
-            
+
             mirror: {
                 start: {
                     text: "*They're sitting alone, drawing in the dust.* You're the new one. The one asking questions. The one who doesn't run from shadows.",
@@ -451,7 +705,7 @@ export class DialogueScene extends Phaser.Scene {
                 }
             }
         };
-        
+
         return dialogues[npcId] || dialogues.leader;
     }
 
@@ -460,41 +714,41 @@ export class DialogueScene extends Phaser.Scene {
             this.closeDialogue();
             return;
         }
-        
+
         const node = this.dialogueData[nodeId];
         if (!node) {
             console.error(`Dialogue node not found: ${nodeId}`);
             this.closeDialogue();
             return;
         }
-        
+
         this.currentNode = node;
-        
+
         // Process flags
         if (node.flags_set) {
             node.flags_set.forEach(flag => window.ASHFALL.setFlag(flag));
         }
-        
+
         // Process relationship changes
         if (node.relationship) {
             window.ASHFALL.adjustRelationship(node.relationship.npc, node.relationship.delta);
         }
-        
+
         // Process memories
         if (node.memory) {
             window.ASHFALL.remember(node.memory.npc, node.memory.content);
         }
-        
+
         // Clear previous content
         this.voiceContainer.removeAll(true);
         this.choicesContainer.removeAll(true);
-        
+
         // Show voice interruptions first
         this.showInterruptions(node.interruptions || []);
-        
+
         // Show dialogue text
         this.dialogueText.setText(node.text);
-        
+
         // Show choices after a delay
         this.time.delayedCall(500, () => {
             this.showChoices(node.choices || []);
@@ -504,12 +758,12 @@ export class DialogueScene extends Phaser.Scene {
     showInterruptions(interruptions) {
         const skills = window.ASHFALL.player.skills;
         let yOffset = 0;
-        
+
         interruptions.forEach(interrupt => {
             if (skills[interrupt.skill] >= interrupt.threshold) {
                 const voiceName = this.voiceNames[interrupt.skill];
                 const voiceColor = this.voiceColors[interrupt.skill];
-                
+
                 const text = this.add.text(0, yOffset, `[${voiceName}] ${interrupt.text}`, {
                     fontFamily: 'Courier New',
                     fontSize: '14px',
@@ -517,7 +771,7 @@ export class DialogueScene extends Phaser.Scene {
                     fontStyle: 'italic',
                     wordWrap: { width: this.cameras.main.width - 200 }
                 }).setOrigin(0.5, 0);
-                
+
                 this.voiceContainer.add(text);
                 yOffset += text.height + 10;
             }
@@ -528,7 +782,7 @@ export class DialogueScene extends Phaser.Scene {
         const skills = window.ASHFALL.player.skills;
         const flags = window.ASHFALL.flags;
         let yOffset = 0;
-        
+
         choices.forEach((choice, index) => {
             // Check requirements
             if (choice.requires) {
@@ -539,25 +793,25 @@ export class DialogueScene extends Phaser.Scene {
                     return; // Skip this choice
                 }
             }
-            
+
             const choiceText = this.add.text(0, yOffset, `> ${choice.text}`, {
                 fontFamily: 'Courier New',
                 fontSize: '14px',
                 color: '#888888'
             }).setInteractive();
-            
+
             choiceText.on('pointerover', () => {
                 choiceText.setColor('#c4a77d');
             });
-            
+
             choiceText.on('pointerout', () => {
                 choiceText.setColor('#888888');
             });
-            
+
             choiceText.on('pointerdown', () => {
                 this.selectChoice(choice);
             });
-            
+
             this.choicesContainer.add(choiceText);
             yOffset += 25;
         });
@@ -571,12 +825,12 @@ export class DialogueScene extends Phaser.Scene {
             choice: choice.text,
             weights: choice.weights || {}
         });
-        
+
         // Process relationship changes
         if (choice.relationship) {
             window.ASHFALL.adjustRelationship(choice.relationship.npc, choice.relationship.delta);
         }
-        
+
         // Handle skill checks
         if (choice.check) {
             const skill = choice.check.skill;
@@ -584,7 +838,7 @@ export class DialogueScene extends Phaser.Scene {
             const skillLevel = window.ASHFALL.player.skills[skill];
             const roll = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
             const total = roll + skillLevel;
-            
+
             if (total >= difficulty) {
                 this.showNode(choice.next);
             } else {
@@ -592,12 +846,15 @@ export class DialogueScene extends Phaser.Scene {
             }
             return;
         }
-        
+
         // Go to next node
         this.showNode(choice.next);
     }
 
     closeDialogue() {
+        // Clean up
+        this.hideLoadingIndicator();
+
         // Resume game scene
         this.scene.resume('GameScene');
         this.scene.stop();
