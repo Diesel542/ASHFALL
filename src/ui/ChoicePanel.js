@@ -47,9 +47,9 @@ export class ChoicePanel {
     this.clear();
 
     const dim = UI_DIMENSIONS.choicePanel;
-    // Position choices to expand upward from the container position
+    // Position choices to expand downward from the container position
     const totalHeight = choices.length * dim.optionHeight;
-    const startY = -totalHeight - 10; // Start above the container position
+    const startY = 0; // Start at container position, expand downward
 
     choices.forEach((choice, index) => {
       const y = startY + index * dim.optionHeight;
@@ -87,14 +87,23 @@ export class ChoicePanel {
     });
 
     this.background.clear();
-    // Subtle background since choices appear within the dialogue box
-    this.background.fillStyle(UI_COLORS.bgDarkest, 0.7);
+    // Dark background for choice panel above dialogue box
+    this.background.fillStyle(UI_COLORS.bgDark, 0.95);
     this.background.fillRoundedRect(
       -dim.width / 2 - 10,
       startY - 10,
       dim.width + 20,
       totalHeight + 20,
-      4
+      6
+    );
+    // Border
+    this.background.lineStyle(1, UI_COLORS.accentRust, 0.6);
+    this.background.strokeRoundedRect(
+      -dim.width / 2 - 10,
+      startY - 10,
+      dim.width + 20,
+      totalHeight + 20,
+      6
     );
 
     this.updateSelector();
