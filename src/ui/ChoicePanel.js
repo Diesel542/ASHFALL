@@ -87,13 +87,14 @@ export class ChoicePanel {
     });
 
     this.background.clear();
-    this.background.fillStyle(UI_COLORS.bgDark, 0.95);
+    // Subtle background since choices appear within the dialogue box
+    this.background.fillStyle(UI_COLORS.bgDarkest, 0.7);
     this.background.fillRoundedRect(
       -dim.width / 2 - 10,
-      startY - 15,
+      startY - 10,
       dim.width + 20,
-      totalHeight + 25,
-      6
+      totalHeight + 20,
+      4
     );
 
     this.updateSelector();

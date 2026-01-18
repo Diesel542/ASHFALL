@@ -229,4 +229,9 @@ export class DialogueBox {
   hideContinueIndicator() {
     this.continueIndicator.setAlpha(0);
   }
+
+  clearText() {
+    this.dialogueText.setText('');
+    this.hideContinueIndicator();
+  }
 }

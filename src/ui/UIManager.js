@@ -56,10 +56,11 @@ export class UIManager {
     });
     this.container.add(this.voicePanel.container);
 
-    // Choice panel (below dialogue box, near bottom of screen)
+    // Choice panel (inside dialogue box area, aligned with text)
+    // Position it so choices expand upward from within the dialogue box
     this.choicePanel = new ChoicePanel(this.scene, {
-      x: width / 2,
-      y: height - 30
+      x: width / 2 + 60,  // Offset right to clear portrait
+      y: height - 60      // Inside dialogue box area
     });
     this.container.add(this.choicePanel.container);
 
@@ -178,6 +179,9 @@ export class UIManager {
    */
   async showChoices(choices) {
     this.state.choicesVisible = true;
+
+    // Clear the dialogue text to make room for choices
+    this.dialogueBox.clearText();
 
     return new Promise((resolve) => {
       this.choicePanel.show(choices, (selectedChoice) => {

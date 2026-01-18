@@ -22,12 +22,19 @@ export class BootScene extends Phaser.Scene {
     // PORTRAITS
     // ═══════════════════════════════════════
 
-    // Load actual portrait images
-    // Each NPC has one portrait used for all mood variants
-    const npcs = ['mara', 'jonas', 'rask', 'edda', 'kale'];
-    npcs.forEach((npc) => {
-      this.load.image(`portrait_${npc}`, `assets/portraits/${npc}.png`);
-    });
+    // Load actual portrait images by their actual filenames
+    // These are the base portraits that other mood variants will alias to
+    const portraitFiles = {
+      mara_guarded: 'mara_guarded.png',
+      jonas_distant: 'jonas_distant.png',
+      rask_watching: 'rask_watching.png',
+      edda_cryptic: 'edda_cryptic.png',
+      kale_eager: 'kale_eager.png'
+    };
+
+    for (const [key, filename] of Object.entries(portraitFiles)) {
+      this.load.image(key, `assets/portraits/${filename}`);
+    }
 
     // Handle load errors gracefully - create placeholders for missing images
     this.load.on('loaderror', (file) => {
@@ -234,34 +241,49 @@ export class BootScene extends Phaser.Scene {
   }
 
   createPortraitAliases() {
-    // Map all mood variants to the base portrait for each NPC
-    const moodVariants = {
-      mara: ['mara_guarded', 'mara_commanding', 'mara_cracking', 'mara_neutral'],
-      jonas: ['jonas_distant', 'jonas_pained', 'jonas_warmth', 'jonas_neutral'],
-      rask: ['rask_watching', 'rask_warning', 'rask_softness', 'rask_neutral'],
-      edda: ['edda_cryptic', 'edda_frightened', 'edda_prophetic', 'edda_neutral'],
-      kale: ['kale_eager', 'kale_confused', 'kale_slipping', 'kale_neutral']
+    // Map all mood variants to a base portrait (the one that was loaded)
+    // baseKey is the actually loaded texture, variants are aliases to create
+    const portraitConfig = {
+      mara: {
+        baseKey: 'mara_guarded',
+        variants: ['mara_commanding', 'mara_cracking', 'mara_neutral']
+      },
+      jonas: {
+        baseKey: 'jonas_distant',
+        variants: ['jonas_pained', 'jonas_warmth', 'jonas_neutral']
+      },
+      rask: {
+        baseKey: 'rask_watching',
+        variants: ['rask_warning', 'rask_softness', 'rask_neutral']
+      },
+      edda: {
+        baseKey: 'edda_cryptic',
+        variants: ['edda_frightened', 'edda_prophetic', 'edda_neutral']
+      },
+      kale: {
+        baseKey: 'kale_eager',
+        variants: ['kale_confused', 'kale_slipping', 'kale_neutral']
+      }
     };
 
-    for (const [npc, variants] of Object.entries(moodVariants)) {
-      const baseKey = `portrait_${npc}`;
+    for (const [npc, config] of Object.entries(portraitConfig)) {
+      const { baseKey, variants } = config;
 
       // Check if the base portrait was loaded
       if (this.textures.exists(baseKey)) {
-        console.log(`[BootScene] Creating aliases for ${npc} portrait`);
+        console.log(`[BootScene] Creating aliases for ${npc} portrait from ${baseKey}`);
 
         // Create aliases for each mood variant
         variants.forEach((variant) => {
           if (!this.textures.exists(variant)) {
-            // Add the texture under the variant name (alias to same image)
             const baseTexture = this.textures.get(baseKey);
             this.textures.addImage(variant, baseTexture.getSourceImage());
           }
         });
       } else {
-        // Portrait not loaded - create placeholders
+        // Portrait not loaded - create placeholders for all variants including base
         console.log(`[BootScene] Creating placeholder for ${npc}`);
-        this.createSinglePlaceholder(npc, variants);
+        this.createSinglePlaceholder(npc, [baseKey, ...variants]);
       }
     }
   }
