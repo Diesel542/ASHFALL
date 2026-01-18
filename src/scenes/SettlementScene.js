@@ -5,6 +5,7 @@ import { getGame } from '../core/GameManager.js';
 import { UIManager } from '../ui/UIManager.js';
 import { DialogueController } from '../ui/DialogueController.js';
 import { Transitions } from '../ui/Transitions.js';
+import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
 import { EVENTS } from '../core/EventBus.js';
@@ -48,6 +49,12 @@ export class SettlementScene extends Phaser.Scene {
     this.ui = new UIManager(this);
     this.dialogue = new DialogueController(this, this.game);
     this.transitions = new Transitions(this);
+
+    // Save/Load menu
+    this.saveLoadMenu = new SaveLoadMenu(this, this.game.save);
+
+    // Setup save/load keyboard shortcuts
+    this.setupSaveLoadShortcuts();
 
     // ═══════════════════════════════════════
     // ATMOSPHERE
@@ -362,6 +369,80 @@ export class SettlementScene extends Phaser.Scene {
     if (timeSinceTremor > 60000 && Math.random() < curieActivity * 0.001) {
       this.game.gsm.triggerTremor('light');
     }
+  }
+
+  // ═══════════════════════════════════════
+  // SAVE/LOAD SHORTCUTS
+  // ═══════════════════════════════════════
+
+  setupSaveLoadShortcuts() {
+    // F5 - Quick Save
+    this.input.keyboard.on('keydown-F5', () => {
+      const result = this.game.quickSave();
+      if (result.success) {
+        this.showNotification('Quick Saved');
+      } else {
+        this.showNotification('Save Failed', true);
+      }
+    });
+
+    // F9 - Quick Load
+    this.input.keyboard.on('keydown-F9', () => {
+      const result = this.game.quickLoad();
+      if (result.success) {
+        this.scene.restart();
+      } else {
+        this.showNotification('No Quick Save Found', true);
+      }
+    });
+
+    // ESC - Open Save/Load Menu (when not in dialogue)
+    this.input.keyboard.on('keydown-ESC', () => {
+      if (!this.saveLoadMenu.isVisible && !this.game.gsm.get('ui.dialogueOpen')) {
+        this.saveLoadMenu.show('save');
+      }
+    });
+
+    // Handle load event (restarts scene with new state)
+    this.events.on('game:loaded', () => {
+      this.scene.restart();
+    });
+
+    // Start auto-save
+    this.game.startAutoSave();
+  }
+
+  /**
+   * Show a notification message
+   */
+  showNotification(text, isError = false) {
+    const { width } = this.cameras.main;
+
+    const notification = this.add.text(width / 2, 50, text, {
+      fontFamily: 'IBM Plex Mono, monospace',
+      fontSize: '14px',
+      color: isError ? '#ff6666' : '#88ff88',
+      backgroundColor: '#1a1714',
+      padding: { x: 16, y: 8 }
+    });
+    notification.setOrigin(0.5);
+    notification.setDepth(3000);
+    notification.setAlpha(0);
+
+    this.tweens.add({
+      targets: notification,
+      alpha: 1,
+      duration: 200
+    });
+
+    this.tweens.add({
+      targets: notification,
+      alpha: 0,
+      y: 30,
+      duration: 500,
+      delay: 1500,
+      onComplete: () => notification.destroy()
+    });
   }
 
   // ═══════════════════════════════════════

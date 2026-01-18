@@ -2,6 +2,7 @@
 
 import { GameStateManager } from './GameStateManager.js';
 import { EVENTS } from './EventBus.js';
+import { SaveManager } from '../systems/SaveManager.js';
 
 /**
  * GAME MANAGER
@@ -14,6 +15,9 @@ export class GameManager {
   constructor() {
     // Create core manager
     this.gsm = new GameStateManager();
+
+    // Create save manager
+    this.save = new SaveManager(this.gsm);
 
     // Systems will be registered dynamically
     this.dialogue = null;
@@ -359,50 +363,97 @@ export class GameManager {
   }
 
   /**
-   * Save game
+   * Save game to slot
    */
-  saveGame(slot = 'auto') {
-    const saveData = this.gsm.exportState();
-    try {
-      localStorage.setItem(`ashfall_save_${slot}`, JSON.stringify(saveData));
-      this.gsm.events.emit(EVENTS.GAME_SAVE, { slot });
-      return true;
-    } catch (error) {
-      console.error('Failed to save game:', error);
-      return false;
-    }
+  saveGame(slot = 'manual_1') {
+    return this.save.save(slot);
   }
 
   /**
-   * Load game
+   * Load game from slot
    */
-  loadGame(slot = 'auto') {
-    try {
-      const saveData = localStorage.getItem(`ashfall_save_${slot}`);
-      if (saveData) {
-        this.gsm.importState(JSON.parse(saveData));
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to load game:', error);
-      return false;
+  loadGame(slot) {
+    const result = this.save.load(slot);
+    if (result.success) {
+      // Reinitialize systems with loaded state
+      this.reinitializeSystems();
+      this.gsm.events.emit(EVENTS.GAME_LOAD, { slot });
     }
+    return result;
+  }
+
+  /**
+   * Quick save (F5)
+   */
+  quickSave() {
+    return this.save.quickSave();
+  }
+
+  /**
+   * Quick load (F9)
+   */
+  quickLoad() {
+    const result = this.save.quickLoad();
+    if (result.success) {
+      this.reinitializeSystems();
+      this.gsm.events.emit(EVENTS.GAME_LOAD, { slot: 'quicksave' });
+    }
+    return result;
+  }
+
+  /**
+   * Start auto-save timer
+   */
+  startAutoSave() {
+    this.save.startAutoSave();
+  }
+
+  /**
+   * Stop auto-save timer
+   */
+  stopAutoSave() {
+    this.save.stopAutoSave();
+  }
+
+  /**
+   * Reinitialize systems after load
+   */
+  reinitializeSystems() {
+    // Reset dialogue histories if dialogue system exists
+    if (this.dialogue && this.dialogue.clearAllHistories) {
+      this.dialogue.clearAllHistories();
+    }
+
+    // Notify systems of state change
+    this.gsm.events.emit('game:loaded');
   }
 
   /**
    * Check if save exists
    */
-  hasSave(slot = 'auto') {
-    return localStorage.getItem(`ashfall_save_${slot}`) !== null;
+  hasSave(slot) {
+    return this.save.hasSave(slot);
+  }
+
+  /**
+   * Check if any save exists
+   */
+  hasAnySave() {
+    return this.save.hasAnySave();
   }
 
   /**
    * Delete a save
    */
-  deleteSave(slot = 'auto') {
-    localStorage.removeItem(`ashfall_save_${slot}`);
-    return this;
+  deleteSave(slot) {
+    return this.save.deleteSave(slot);
+  }
+
+  /**
+   * Get most recent save slot (for Continue button)
+   */
+  getMostRecentSave() {
+    return this.save.getMostRecentSave();
   }
 
   /**
