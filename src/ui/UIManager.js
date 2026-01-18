@@ -56,10 +56,12 @@ export class UIManager {
     });
     this.container.add(this.voicePanel.container);
 
-    // Choice panel (above the dialogue box, not overlapping)
+    // Choice panel (well above the dialogue box)
+    // Dialogue box top is at height-230, choices expand ~160px downward
+    // So position at height-400 to ensure no overlap
     this.choicePanel = new ChoicePanel(this.scene, {
       x: width / 2,
-      y: height - 250  // Above dialogue box (which is at height-140)
+      y: height - 400
     });
     this.container.add(this.choicePanel.container);
 
