@@ -8,6 +8,7 @@ import { Transitions } from '../ui/Transitions.js';
 import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
 import { QuestNotification } from '../ui/QuestNotification.js';
 import { CurieWhisperPanel } from '../ui/CurieWhisperPanel.js';
+import { CurieGlimpse } from '../ui/CurieGlimpse.js';
 import { CurieManifestationController } from '../systems/CurieManifestationController.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
@@ -70,6 +71,7 @@ export class SettlementScene extends Phaser.Scene {
     // Curie manifestation system
     this.curieController = new CurieManifestationController(this.game.gsm);
     this.curieWhisper = new CurieWhisperPanel(this);
+    this.curieGlimpse = new CurieGlimpse(this);
 
     // Setup save/load keyboard shortcuts
     this.setupSaveLoadShortcuts();
@@ -410,6 +412,9 @@ export class SettlementScene extends Phaser.Scene {
     const lengthBonus = (data.text?.length || 0) * 20;
     const stateBonus = data.state === 'emergent' ? 2000 : 0;
     const duration = Math.min(baseDuration + lengthBonus + stateBonus, 8000);
+
+    // Try to show subliminal portrait glimpse (40% chance)
+    this.curieGlimpse.tryGlimpse(data.state);
 
     await this.curieWhisper.show(data.text, data.state, duration);
   }

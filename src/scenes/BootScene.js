@@ -29,7 +29,8 @@ export class BootScene extends Phaser.Scene {
       jonas_distant: 'jonas_distant.png',
       rask_watching: 'rask_watching.png',
       edda_cryptic: 'edda_cryptic.png',
-      kale_eager: 'kale_eager.png'
+      kale_eager: 'kale_eager.png',
+      curie_eager: 'curie_eager.png'  // Curie's subliminal portrait
     };
 
     for (const [key, filename] of Object.entries(portraitFiles)) {
