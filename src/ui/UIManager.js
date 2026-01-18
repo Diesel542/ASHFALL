@@ -43,23 +43,23 @@ export class UIManager {
     // Dialogue box (bottom center)
     this.dialogueBox = new DialogueBox(this.scene, {
       x: width / 2,
-      y: height - 120,
+      y: height - 140,
       width: 700,
-      height: 200
+      height: 180
     });
     this.container.add(this.dialogueBox.container);
 
-    // Voice panel (above dialogue box)
+    // Voice panel (well above dialogue box to avoid overlap)
     this.voicePanel = new VoicePanel(this.scene, {
       x: width / 2,
-      y: height - 280
+      y: height - 320
     });
     this.container.add(this.voicePanel.container);
 
-    // Choice panel (inside dialogue box area)
+    // Choice panel (below dialogue box, near bottom of screen)
     this.choicePanel = new ChoicePanel(this.scene, {
       x: width / 2,
-      y: height - 80
+      y: height - 30
     });
     this.container.add(this.choicePanel.container);
 
