@@ -1,97 +1,42 @@
-// ASHFALL - Main Entry Point
-// A dying settlement. Five people. One secret.
+// src/main.js
 
 import Phaser from 'phaser';
-import { BootScene } from './scenes/BootScene.js';
-import { GameScene } from './scenes/GameScene.js';
-import { DialogueScene } from './scenes/DialogueScene.js';
-import { UIScene } from './scenes/UIScene.js';
+import { gameConfig } from './config.js';
+import { getGame } from './core/GameManager.js';
 
-const config = {
-    type: Phaser.AUTO,
-    width: 1280,
-    height: 720,
-    parent: 'game-container',
-    backgroundColor: '#1a1a1a',
-    pixelArt: true,
-    scene: [BootScene, GameScene, DialogueScene, UIScene],
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
-    }
-};
+/**
+ * ASHFALL — Main Entry Point
+ *
+ * "Small lives. Heavy truths. The earth remembers."
+ */
 
-// Global game state - persists across scenes
-window.ASHFALL = {
-    // Player state
-    player: {
-        x: 0,
-        y: 0,
-        skills: {
-            logic: 5,
-            instinct: 5,
-            empathy: 5,
-            ghost: 5
-        }
-    },
-    
-    // Consequence tracking
-    flags: new Map(),
-    memories: new Map(),
-    relationships: {},
-    weights: {
-        kindness: 0,
-        cruelty: 0,
-        truth: 0,
-        deception: 0,
-        courage: 0,
-        cowardice: 0
-    },
-    
-    // Actions log
-    actions: [],
-    
-    // Helper methods
-    setFlag(key, value = true) {
-        this.flags.set(key, value);
-    },
-    
-    hasFlag(key) {
-        return this.flags.get(key) || false;
-    },
-    
-    remember(npc, memory) {
-        if (!this.memories.has(npc)) {
-            this.memories.set(npc, []);
-        }
-        this.memories.get(npc).push(memory);
-    },
-    
-    getMemories(npc) {
-        return this.memories.get(npc) || [];
-    },
-    
-    adjustRelationship(npc, delta) {
-        this.relationships[npc] = (this.relationships[npc] || 0) + delta;
-    },
-    
-    recordAction(action) {
-        this.actions.push({
-            ...action,
-            timestamp: Date.now()
-        });
-        
-        if (action.weights) {
-            for (const [key, value] of Object.entries(action.weights)) {
-                if (this.weights.hasOwnProperty(key)) {
-                    this.weights[key] += value;
-                }
-            }
-        }
-    }
-};
+// Get the singleton game manager
+const Game = getGame();
 
-// Start the game
-const game = new Phaser.Game(config);
+// Initialize the Phaser game
+const game = new Phaser.Game(gameConfig);
 
-export default game;
+// Make Game manager globally accessible for debugging and scene access
+window.AshfallGame = Game;
+
+// Handle window focus/blur for pause
+window.addEventListener('blur', () => {
+  if (Game.gsm) {
+    Game.gsm.events.emit('game:pause');
+  }
+});
+
+window.addEventListener('focus', () => {
+  if (Game.gsm) {
+    Game.gsm.events.emit('game:resume');
+  }
+});
+
+// Log startup
+console.log(
+  '%c ASHFALL ',
+  'background: #1a1714; color: #e8dcc8; font-size: 20px; padding: 10px;'
+);
+console.log('%c The ground hums. Something waits below. ', 'color: #6b6358; font-style: italic;');
+
+export { game, Game };
