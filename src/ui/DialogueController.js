@@ -2,6 +2,7 @@
 
 import { UIManager } from './UIManager.js';
 import { Transitions } from './Transitions.js';
+import { ChoiceSystem } from '../dialogue/ChoiceSystem.js';
 
 /**
  * DIALOGUE CONTROLLER
@@ -25,6 +26,9 @@ export class DialogueController {
     this.game = gameManager;
     this.ui = new UIManager(scene);
     this.transitions = new Transitions(scene);
+
+    // Initialize dynamic choice system
+    this.choiceSystem = new ChoiceSystem(gameManager.gsm);
 
     this.currentConversation = null;
   }
@@ -63,10 +67,9 @@ export class DialogueController {
    * Handle player choice
    */
   async handleChoice(choice) {
-    // Apply voice bonus if tagged
-    if (choice.voiceTag) {
-      this.game.gsm.adjustVoiceScore(choice.voiceTag, 1);
-    }
+    // Apply choice effects through the choice system
+    this.choiceSystem.currentNpc = this.currentConversation?.npc;
+    this.choiceSystem.applyChoice(choice);
 
     // Get NPC response from OpenAI
     const npcId = this.currentConversation.npc;
@@ -147,79 +150,11 @@ export class DialogueController {
   }
 
   /**
-   * Generate contextual choices
+   * Generate contextual choices using the dynamic ChoiceSystem
    */
   async generateChoices(npcId, context) {
-    // Base choices always available
-    const choices = [];
-
-    // Context-specific choices based on NPC and situation
-    const npcChoices = this.getNpcSpecificChoices(npcId, context);
-    choices.push(...npcChoices);
-
-    // Voice-tagged choices based on dominant voice
-    const voiceChoices = this.getVoiceChoices(context);
-    choices.push(...voiceChoices);
-
-    // Always add leave option
-    choices.push({
-      id: 'leave',
-      text: '[Leave]',
-      voiceTag: null
-    });
-
-    return choices;
-  }
-
-  getNpcSpecificChoices(npcId, context) {
-    // Simplified - in full implementation, these would be more dynamic
-    const choices = {
-      mara: [
-        { id: 'resources', text: 'How are the supplies holding up?', voiceTag: 'LOGIC' },
-        { id: 'settlement', text: 'Tell me about Ashfall.', voiceTag: null },
-        { id: 'others', text: 'What do you think of the others?', voiceTag: 'EMPATHY' }
-      ],
-      jonas: [
-        { id: 'clinic', text: 'Why is the clinic closed?', voiceTag: 'EMPATHY' },
-        { id: 'help', text: 'Can you help with injuries?', voiceTag: 'LOGIC' },
-        { id: 'past', text: 'You seem troubled.', voiceTag: 'EMPATHY' }
-      ],
-      rask: [
-        { id: 'watch', text: 'What are you watching for?', voiceTag: 'LOGIC' },
-        { id: 'children', text: 'You keep an eye on the children.', voiceTag: 'EMPATHY' },
-        { id: 'danger', text: 'Is it dangerous here?', voiceTag: 'INSTINCT' }
-      ],
-      edda: [
-        { id: 'hum', text: 'Do you hear that hum?', voiceTag: 'GHOST' },
-        { id: 'history', text: 'How long have you been here?', voiceTag: null },
-        { id: 'shaft', text: "What's that sealed place?", voiceTag: 'GHOST' }
-      ],
-      kale: [
-        { id: 'self', text: 'Tell me about yourself.', voiceTag: 'EMPATHY' },
-        { id: 'others', text: 'What do you think of the others?', voiceTag: null },
-        { id: 'strange', text: 'Do you ever feel... strange here?', voiceTag: 'GHOST' }
-      ]
-    };
-
-    return choices[npcId] || [];
-  }
-
-  getVoiceChoices(context) {
-    const dominant = this.game.gsm.getDominantVoice();
-
-    // Add a voice-specific choice based on dominant voice
-    const voiceChoices = {
-      LOGIC: { id: 'analyze', text: 'Let me think about this logically.', voiceTag: 'LOGIC' },
-      INSTINCT: { id: 'gut', text: 'Something feels wrong here.', voiceTag: 'INSTINCT' },
-      EMPATHY: { id: 'feel', text: 'How are you really feeling?', voiceTag: 'EMPATHY' },
-      GHOST: { id: 'memory', text: 'This reminds me of something...', voiceTag: 'GHOST' }
-    };
-
-    if (dominant.confidence !== 'low' && voiceChoices[dominant.voice]) {
-      return [voiceChoices[dominant.voice]];
-    }
-
-    return [];
+    // Use the ChoiceSystem for dynamic, context-aware choices
+    return this.choiceSystem.generateChoices(npcId, context);
   }
 
   async generateVoiceReactions(npcId, npcResponse) {

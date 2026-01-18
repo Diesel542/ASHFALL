@@ -26,3 +26,11 @@ export { DialogueController } from './DialogueController.js';
 
 // Save/Load
 export { SaveLoadMenu } from './SaveLoadMenu.js';
+
+// Quest and Voice tracking
+export { QuestNotification } from './QuestNotification.js';
+export { VoiceTracker } from './VoiceTracker.js';
+
+// Curie manifestation UI
+export { CurieWhisperPanel } from './CurieWhisperPanel.js';
+export { CurieGlimpse } from './CurieGlimpse.js';

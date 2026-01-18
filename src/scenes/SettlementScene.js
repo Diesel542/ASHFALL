@@ -9,6 +9,7 @@ import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
 import { QuestNotification } from '../ui/QuestNotification.js';
 import { CurieWhisperPanel } from '../ui/CurieWhisperPanel.js';
 import { CurieGlimpse } from '../ui/CurieGlimpse.js';
+import { VoiceTracker } from '../ui/VoiceTracker.js';
 import { CurieManifestationController } from '../systems/CurieManifestationController.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
@@ -72,6 +73,9 @@ export class SettlementScene extends Phaser.Scene {
     this.curieController = new CurieManifestationController(this.game.gsm);
     this.curieWhisper = new CurieWhisperPanel(this);
     this.curieGlimpse = new CurieGlimpse(this);
+
+    // Voice alignment tracker (bottom-right corner)
+    this.voiceTracker = new VoiceTracker(this, this.game.gsm);
 
     // Setup save/load keyboard shortcuts
     this.setupSaveLoadShortcuts();

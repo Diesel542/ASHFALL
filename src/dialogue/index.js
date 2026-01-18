@@ -26,3 +26,12 @@ export {
   getGossipLine,
   shouldMention
 } from './relationships.js';
+
+// Dynamic choice system
+export { ChoiceSystem } from './ChoiceSystem.js';
+export { CHOICE_POOLS } from './choicePools.js';
+export { VOICE_CHOICES, getVoiceCommentary, getAllVoiceChoices } from './voiceChoices.js';
+export { QUEST_CHOICES, getQuestChoices, hasQuestChoicesForNpc } from './questChoices.js';
+
+// Curie voice system
+export { CurieVoiceEngine } from './CurieVoiceEngine.js';
