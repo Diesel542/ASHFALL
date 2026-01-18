@@ -18,12 +18,13 @@
   ],
   "authors": [
     "Ronni Holmvig Strøm (Vision)",
-    "Aria (Voice)", 
+    "Aria (Voice)",
     "Logos (Systems)"
   ],
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "openai": "^6.16.0",
     "phaser": "^3.70.0"
   },
   "devDependencies": {

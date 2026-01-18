@@ -5,24 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ASHFALL</title>
     <style>
+        /* Custom fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Oswald:wght@400;500&family=IBM+Plex+Mono:ital@0;1&display=swap');
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            background: #1a1a1a;
+            background-color: #1a1714;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: 'Courier New', monospace;
+            overflow: hidden;
         }
+
         #game-container {
-            position: relative;
-        }
-        canvas {
-            display: block;
+            /* Game will be injected here */
         }
     </style>
 </head>
