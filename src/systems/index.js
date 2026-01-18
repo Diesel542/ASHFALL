@@ -26,6 +26,7 @@ export { TremorSystem } from './TremorSystem.js';
 export { GhostOverride } from './GhostOverride.js';
 export { NpcResonance } from './NpcResonance.js';
 export { EndgameCalculator } from './EndgameCalculator.js';
+export { CurieManifestationController } from './CurieManifestationController.js';
 
 // Time and quest systems
 export { TimeSystem } from './TimeSystem.js';

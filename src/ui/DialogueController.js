@@ -88,6 +88,9 @@ export class DialogueController {
       // Show NPC response
       await this.ui.showDialogue(result.response, emotion);
 
+      // Capture emotional dialogue for Curie's echo bank
+      this.captureForCurieEcho(npcId, result.response);
+
       // Generate and show voice reactions
       const voices = await this.generateVoiceReactions(npcId, result.response);
       if (voices && Object.keys(voices).length > 0) {
@@ -353,5 +356,71 @@ export class DialogueController {
     };
 
     return voices[npcId] || {};
+  }
+
+  // ═══════════════════════════════════════
+  // CURIE ECHO CAPTURE
+  // ═══════════════════════════════════════
+
+  /**
+   * Capture emotionally weighted NPC dialogue for Curie's echo bank
+   */
+  captureForCurieEcho(npcId, response) {
+    const emotionalWeight = this.analyzeEmotionalWeight(response);
+
+    if (emotionalWeight > 0.5) {
+      const echoPhrase = this.extractEchoablePhrase(response);
+
+      // Emit for Curie to potentially echo later
+      this.game.gsm.events.emit('dialogue:line', {
+        speaker: npcId,
+        text: echoPhrase,
+        emotionalWeight: emotionalWeight
+      });
+    }
+  }
+
+  /**
+   * Analyze emotional weight of dialogue text
+   */
+  analyzeEmotionalWeight(text) {
+    let weight = 0.3; // base
+
+    // Emotional markers increase weight
+    const emotionalMarkers = [
+      /\*[^*]+\*/g,           // Action text
+      /\b(remember|forget|lost|dead|afraid|alone)\b/gi,
+      /\b(sorry|forgive|guilt|shame)\b/gi,
+      /\.\.\./g,              // Hesitation
+      /—/g                     // Interruption
+    ];
+
+    for (const marker of emotionalMarkers) {
+      if (marker.test(text)) {
+        weight += 0.1;
+      }
+    }
+
+    return Math.min(weight, 1.0);
+  }
+
+  /**
+   * Extract the most emotionally resonant phrase for Curie to echo
+   */
+  extractEchoablePhrase(text) {
+    // Remove action text for the echo
+    const cleaned = text.replace(/\*[^*]+\*/g, '').trim();
+
+    // Split into sentences
+    const sentences = cleaned.split(/[.!?]+/).filter(s => s.trim());
+
+    // Return shortest meaningful sentence (more impactful as echoes)
+    const meaningful = sentences.filter(s => s.trim().length > 10 && s.trim().length < 60);
+
+    if (meaningful.length > 0) {
+      return meaningful.reduce((a, b) => a.length < b.length ? a : b).trim();
+    }
+
+    return sentences[0]?.trim() || cleaned.substring(0, 50);
   }
 }

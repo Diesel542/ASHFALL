@@ -7,6 +7,8 @@ import { DialogueController } from '../ui/DialogueController.js';
 import { Transitions } from '../ui/Transitions.js';
 import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
 import { QuestNotification } from '../ui/QuestNotification.js';
+import { CurieWhisperPanel } from '../ui/CurieWhisperPanel.js';
+import { CurieManifestationController } from '../systems/CurieManifestationController.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
 import { EVENTS } from '../core/EventBus.js';
@@ -64,6 +66,10 @@ export class SettlementScene extends Phaser.Scene {
 
     // Quest notification
     this.questNotification = new QuestNotification(this);
+
+    // Curie manifestation system
+    this.curieController = new CurieManifestationController(this.game.gsm);
+    this.curieWhisper = new CurieWhisperPanel(this);
 
     // Setup save/load keyboard shortcuts
     this.setupSaveLoadShortcuts();
@@ -130,6 +136,19 @@ export class SettlementScene extends Phaser.Scene {
 
     // NPC location updates (after rest or time change)
     events.on('npcs:locations_updated', () => this.onNpcLocationsUpdated());
+
+    // Curie manifestations
+    events.on('curie:speaks', (e) => this.onCurieSpeaks(e.data));
+
+    // Direct contact with Curie at shaft (C key)
+    this.input.keyboard.on('keydown-C', async () => {
+      if (this.game.gsm.get('player.location') === 'sealed_shaft') {
+        const result = await this.curieController.directContact('I want to understand.');
+        if (!result.success && result.reason) {
+          this.showNarrativeText(result.reason);
+        }
+      }
+    });
   }
 
   // ═══════════════════════════════════════
@@ -383,6 +402,16 @@ export class SettlementScene extends Phaser.Scene {
     // Update current location panel
     const location = this.game.gsm.get('player.location');
     this.onLocationChange({ to: location });
+  }
+
+  async onCurieSpeaks(data) {
+    // Determine duration based on text length and state
+    const baseDuration = 4000;
+    const lengthBonus = (data.text?.length || 0) * 20;
+    const stateBonus = data.state === 'emergent' ? 2000 : 0;
+    const duration = Math.min(baseDuration + lengthBonus + stateBonus, 8000);
+
+    await this.curieWhisper.show(data.text, data.state, duration);
   }
 
   /**
