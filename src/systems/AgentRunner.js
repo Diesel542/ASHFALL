@@ -4,12 +4,18 @@
 import { createAgentsSync, hasAgent } from '../agents/index.js';
 import { VoiceReactor } from './VoiceReactor.js';
 import { PlayerProfile } from './PlayerProfile.js';
+import { ToneValidator } from './ToneValidator.js';
+import { WeatherSystem } from './WeatherSystem.js';
+import { EnvironmentalText } from './EnvironmentalText.js';
 
 export class AgentRunner {
   constructor() {
     this.agents = createAgentsSync();
     this.voiceReactor = new VoiceReactor();
     this.playerProfile = new PlayerProfile();
+    this.toneValidator = new ToneValidator();
+    this.weatherSystem = new WeatherSystem();
+    this.environmentalText = new EnvironmentalText();
     this.apiEndpoint = 'https://api.anthropic.com/v1/messages';
 
     // Make player profile globally accessible for Kale's mirroring
@@ -61,7 +67,21 @@ export class AgentRunner {
       // Call LLM API
       const response = await this.callLLM(prompt);
 
-      // Validate response
+      // TONE VALIDATION - Check and auto-correct dialogue
+      const toneCheck = this.toneValidator.validate(response, npcId);
+      if (!toneCheck.valid || toneCheck.issues.length > 0) {
+        console.warn('Tone issues detected:', toneCheck.issues);
+      }
+      // Use tone-corrected dialogue
+      response.dialogue = toneCheck.dialogue;
+
+      // NPC-specific voice check
+      const voiceCheck = this.toneValidator.validateNpcVoice(response.dialogue, npcId);
+      if (!voiceCheck.valid) {
+        console.warn('NPC voice issues:', voiceCheck.issues);
+      }
+
+      // Validate response structure
       const validated = this.validateResponse(response, agent, flags);
 
       // Update agent state
@@ -86,6 +106,9 @@ export class AgentRunner {
         window.ASHFALL.playerProfile = this.playerProfile.getProfile();
       }
 
+      // Update weather based on conversation events
+      this.updateWeatherFromConversation(validated, npcId);
+
       // Get voice reactions using the agent's hooks
       const voiceReactions = await this.voiceReactor.getReactions(
         agent,
@@ -97,10 +120,18 @@ export class AgentRunner {
         flags
       );
 
+      // Add ambient text based on weather (30% chance)
+      let ambientText = null;
+      if (Math.random() < 0.3) {
+        ambientText = this.weatherSystem.getAmbientText();
+      }
+
       return {
         dialogue: validated.dialogue,
         choices: validated.player_choices,
         voiceInterrupts: voiceReactions,
+        ambientText: ambientText,
+        weather: this.weatherSystem.getCurrentWeather(),
         internal_state: validated.internal_state,
         success: true
       };
@@ -216,6 +247,55 @@ export class AgentRunner {
         window.ASHFALL.setFlag(flag);
       }
     }
+  }
+
+  // Update weather based on conversation events
+  updateWeatherFromConversation(response, npcId) {
+    const recentEvents = [];
+
+    // Detect conversation events that affect weather
+    if (response.flags_to_set?.some(f =>
+        f.includes('shaft') || f.includes('singing') || f.includes('below'))) {
+      recentEvents.push('shaft_discussed');
+    }
+
+    if (response.dialogue?.toLowerCase().includes('shaft') ||
+        response.dialogue?.toLowerCase().includes('singing') ||
+        response.dialogue?.toLowerCase().includes('below')) {
+      recentEvents.push('shaft_discussed');
+    }
+
+    if (response.relationship_delta < -5) {
+      recentEvents.push('confrontation');
+    }
+
+    if (response.internal_state?.includes('deflect') ||
+        response.internal_state?.includes('hiding') ||
+        response.internal_state?.includes('guarded')) {
+      recentEvents.push('npc_deflected');
+    }
+
+    if (response.internal_state?.includes('partial') ||
+        response.internal_state?.includes('hint')) {
+      recentEvents.push('partial_truth_told');
+    }
+
+    // Update weather system
+    this.weatherSystem.updateWeather(
+      window.ASHFALL.flags,
+      window.ASHFALL.relationships,
+      recentEvents
+    );
+  }
+
+  // Get current weather description
+  getWeatherDescription() {
+    return this.weatherSystem.getCurrentDescription();
+  }
+
+  // Get environmental text generator for items/locations
+  getEnvironmentalText() {
+    return this.environmentalText;
   }
 
   // Record a player choice with weights for the profile system

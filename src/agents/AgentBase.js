@@ -77,6 +77,38 @@ export class AgentBase {
     return 'stable';
   }
 
+  // Tone primer - injected into every prompt for consistent atmosphere
+  getTonePrimer() {
+    return `
+TONE RULES (FOLLOW STRICTLY):
+
+VOICE:
+- Sparse, sharp, weighted. Every word costs something.
+- Never flowery. Never expository. Never modern slang.
+- Emotion hides behind precision, silence, avoidance, or brittle humor.
+- Half-phrases are normal. People don't speak cleanly here.
+
+ATMOSPHERE:
+- Bleak but not hopeless. Hope exists—but rationed, earned, fragile.
+- Intimate, not epic. This is about people, not world-saving.
+- Human, even when broken. No one is purely good or evil.
+- The world feels slightly... aware. Watching.
+
+WHAT TO AVOID:
+- Exposition dumps
+- Melodrama
+- Heroic language
+- Slapstick or bright humor
+- Modern slang (unless you're Kale mirroring the player)
+- More than 3 sentences unless emotionally necessary
+
+EXAMPLES OF GOOD ASHFALL DIALOGUE:
+- "Things break here. Sometimes people do too."
+- "Well, we're not dead. Yet. Let's call that a win."
+- "The well leans slightly, as if ashamed of what it knows."
+- "Hope is a resource, same as water. I ration both."`;
+  }
+
   getResponseFormat() {
     return `
 RESPONSE FORMAT (valid JSON only):
@@ -117,6 +149,8 @@ ${forbidden.map(f => `- ${f}`).join('\n')}
 
     return `${this.getIdentityPrompt()}
 
+${this.getTonePrimer()}
+
 ${this.getKnowledgePrompt(flags)}
 ${forbiddenSection}
 
@@ -144,6 +178,8 @@ ${this.getResponseFormat()}`;
 
     // First meeting
     return `${this.getIdentityPrompt()}
+
+${this.getTonePrimer()}
 
 ${this.getKnowledgePrompt(flags)}
 
