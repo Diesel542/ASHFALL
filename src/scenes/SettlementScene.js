@@ -9,6 +9,7 @@ import { SaveLoadMenu } from '../ui/SaveLoadMenu.js';
 import { Settlement } from '../world/Settlement.js';
 import { PlayerController } from '../world/PlayerController.js';
 import { EVENTS } from '../core/EventBus.js';
+import { DialogueEngine } from '../dialogue/DialogueEngine.js';
 
 /**
  * SETTLEMENT SCENE
@@ -31,6 +32,13 @@ export class SettlementScene extends Phaser.Scene {
 
     // Get game manager
     this.game = getGame();
+
+    // Initialize dialogue engine if not already done
+    if (!this.game.dialogue) {
+      console.log('[SettlementScene] Initializing DialogueEngine...');
+      const dialogueEngine = new DialogueEngine();
+      this.game.initialize({ dialogue: dialogueEngine });
+    }
 
     // ═══════════════════════════════════════
     // WORLD SETUP
