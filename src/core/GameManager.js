@@ -3,6 +3,9 @@
 import { GameStateManager } from './GameStateManager.js';
 import { EVENTS } from './EventBus.js';
 import { SaveManager } from '../systems/SaveManager.js';
+import { TimeSystem } from '../systems/TimeSystem.js';
+import { QuestSystem } from '../systems/QuestSystem.js';
+import { QuestTriggerSystem } from '../systems/QuestTriggerSystem.js';
 
 /**
  * GAME MANAGER
@@ -24,6 +27,15 @@ export class GameManager {
     this.narrative = null;
     this.curie = null;
     this.relationships = null;
+
+    // Initialize time and quest systems
+    this.questSystem = new QuestSystem();
+    this.time = new TimeSystem(this.gsm);
+    this.questTriggers = new QuestTriggerSystem(this.gsm, this.questSystem);
+
+    // Register time and quest systems
+    this.gsm.registerSystem('time', this.time);
+    this.gsm.registerSystem('questTriggers', this.questTriggers);
 
     // Track initialization state
     this.initialized = false;
@@ -249,6 +261,49 @@ export class GameManager {
   passTime(hours = 1) {
     this.gsm.advanceTime(hours);
     return this;
+  }
+
+  // ═══════════════════════════════════════
+  // TIME API
+  // ═══════════════════════════════════════
+
+  /**
+   * Rest at player quarters
+   */
+  rest() {
+    return this.time.rest();
+  }
+
+  /**
+   * Get current time info
+   */
+  getTimeInfo() {
+    return this.time.getTimeDescription();
+  }
+
+  // ═══════════════════════════════════════
+  // QUEST API
+  // ═══════════════════════════════════════
+
+  /**
+   * Get active quests
+   */
+  getActiveQuests() {
+    return this.questTriggers.getActiveQuests();
+  }
+
+  /**
+   * Complete a quest
+   */
+  completeQuest(questId, outcome) {
+    return this.questTriggers.completeQuest(questId, outcome);
+  }
+
+  /**
+   * Check for available quests
+   */
+  checkForQuests() {
+    this.questTriggers.checkAllTriggers();
   }
 
   /**

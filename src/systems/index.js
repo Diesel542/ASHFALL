@@ -27,8 +27,13 @@ export { GhostOverride } from './GhostOverride.js';
 export { NpcResonance } from './NpcResonance.js';
 export { EndgameCalculator } from './EndgameCalculator.js';
 
+// Time and quest systems
+export { TimeSystem } from './TimeSystem.js';
+export { QuestSystem } from './QuestSystem.js';
+export { QuestTriggerSystem } from './QuestTriggerSystem.js';
+
 // Systems to build:
 // - [ ] Combat (avoidable, turn-based, action points)
 // - [ ] Inventory (items with weight, both physical and narrative)
-// - [ ] Save/Load (full state serialization)
-// - [ ] Time (day/night? events that trigger over time?)
+// - [x] Save/Load (full state serialization)
+// - [x] Time (day/night, events that trigger over time)
