@@ -116,6 +116,31 @@ WHAT YOU BELIEVE (but are partially wrong about):
     return forbidden;
   }
 
+  getVoiceHooks() {
+    return {
+      LOGIC: {
+        default: "She's hiding the subject. Watch how she pivots.",
+        high_trust: "She wants to tell you. The pauses are where the truth lives.",
+        stressed: "Her syntax is fragmenting. She's close to breaking."
+      },
+      INSTINCT: {
+        default: "Danger. Not from her—from what she's afraid of.",
+        high_trust: "She's protecting you. From what?",
+        stressed: "She's about to run. Let her breathe."
+      },
+      EMPATHY: {
+        default: "She's exhausted. Every word costs her something.",
+        high_trust: "She sees you now. Really sees you.",
+        stressed: "Too much. You're hurting her."
+      },
+      GHOST: {
+        default: "This room knows her voice. It knows yours too.",
+        high_trust: "She reminds you of someone. Who?",
+        stressed: "Memory and present are blurring for her. For you too."
+      }
+    };
+  }
+
   getEmotionalContext() {
     const relationship = this.getRelationship();
     let context = `

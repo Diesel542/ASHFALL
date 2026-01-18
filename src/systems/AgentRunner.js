@@ -1,29 +1,26 @@
 // ASHFALL - AgentRunner
 // Orchestrates LLM calls, assembles context, validates responses
 
-import { EddaAgent } from '../agents/EddaAgent.js';
+import { createAgentsSync, hasAgent } from '../agents/index.js';
 import { VoiceReactor } from './VoiceReactor.js';
-import { hasAgent } from '../agents/index.js';
+import { PlayerProfile } from './PlayerProfile.js';
 
 export class AgentRunner {
   constructor() {
-    this.agents = {};
+    this.agents = createAgentsSync();
     this.voiceReactor = new VoiceReactor();
+    this.playerProfile = new PlayerProfile();
     this.apiEndpoint = 'https://api.anthropic.com/v1/messages';
-    this.isInitialized = false;
+
+    // Make player profile globally accessible for Kale's mirroring
+    if (window.ASHFALL) {
+      window.ASHFALL.playerProfile = this.playerProfile.getProfile();
+    }
   }
 
-  // Initialize agent for an NPC (lazy loading)
-  async getAgent(npcId) {
-    if (!this.agents[npcId]) {
-      // Currently only Edda has an agent implementation
-      if (npcId === 'keeper') {
-        this.agents[npcId] = new EddaAgent();
-      } else {
-        return null;
-      }
-    }
-    return this.agents[npcId];
+  // Get agent for an NPC
+  getAgent(npcId) {
+    return this.agents[npcId] || null;
   }
 
   // Check if we can use the agent system for this NPC
@@ -47,7 +44,7 @@ export class AgentRunner {
 
   // Main conversation method
   async runConversation(npcId, playerInput, isOpening = false) {
-    const agent = await this.getAgent(npcId);
+    const agent = this.getAgent(npcId);
     if (!agent) {
       console.warn(`No agent found for NPC: ${npcId}`);
       return this.getFallbackResponse(npcId);
@@ -79,9 +76,19 @@ export class AgentRunner {
       // Update game state
       this.applyGameStateChanges(validated, npcId);
 
-      // Get voice reactions
+      // Record player choice for Kale's mirroring system
+      if (playerInput) {
+        this.playerProfile.recordChoice({
+          text: playerInput,
+          npc: npcId,
+          weights: {} // Will be updated when player selects a choice with weights
+        });
+        window.ASHFALL.playerProfile = this.playerProfile.getProfile();
+      }
+
+      // Get voice reactions using the agent's hooks
       const voiceReactions = await this.voiceReactor.getReactions(
-        npcId,
+        agent,
         validated.dialogue,
         {
           npcStress: agent.currentStress,
@@ -160,7 +167,7 @@ export class AgentRunner {
       flags_to_set: Array.isArray(response.flags_to_set) ? response.flags_to_set : [],
       player_choices: Array.isArray(response.player_choices)
         ? response.player_choices
-        : this.getDefaultChoices()
+        : this.getDefaultChoices(agent.codex.name)
     };
 
     // Validate choices format
@@ -189,7 +196,6 @@ export class AgentRunner {
       for (const keyword of keywords) {
         if (validated.dialogue.toLowerCase().includes(keyword)) {
           console.warn(`Potential forbidden topic breach detected: "${topic}"`);
-          // In production, could regenerate or filter the response
           break;
         }
       }
@@ -212,7 +218,13 @@ export class AgentRunner {
     }
   }
 
-  getDefaultChoices() {
+  // Record a player choice with weights for the profile system
+  recordPlayerChoice(choice) {
+    this.playerProfile.recordChoice(choice);
+    window.ASHFALL.playerProfile = this.playerProfile.getProfile();
+  }
+
+  getDefaultChoices(npcName) {
     return [
       { text: 'Tell me more.', type: 'gentle', skill_hint: null },
       { text: 'I should go.', type: 'withdrawal', skill_hint: null }
@@ -222,12 +234,59 @@ export class AgentRunner {
   getFallbackResponse(npcId) {
     // Hardcoded fallbacks if API fails
     const fallbacks = {
+      leader: {
+        dialogue: "*She looks at you, calculating.* We're done here.",
+        choices: [
+          { text: 'For now.', type: 'direct', skill_hint: null },
+          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
+        ],
+        voiceInterrupts: [
+          {
+            voice: 'LOGIC',
+            text: "She's calculating. You're either useful or a liability.",
+            color: '#88ccff'
+          }
+        ],
+        internal_state: 'dismissive',
+        success: false
+      },
+      healer: {
+        dialogue: "*He looks away.* I... should check on supplies.",
+        choices: [
+          { text: 'Are you alright?', type: 'gentle', skill_hint: 'EMPATHY' },
+          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
+        ],
+        voiceInterrupts: [
+          {
+            voice: 'EMPATHY',
+            text: "The guilt is eating him alive. Every day.",
+            color: '#88ff88'
+          }
+        ],
+        internal_state: 'avoidant',
+        success: false
+      },
+      threat: {
+        dialogue: '*Silence. He watches.*',
+        choices: [
+          { text: '*Wait*', type: 'silence', skill_hint: null },
+          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
+        ],
+        voiceInterrupts: [
+          {
+            voice: 'INSTINCT',
+            text: 'Dangerous. Absolutely dangerous. But... controlled.',
+            color: '#ff8844'
+          }
+        ],
+        internal_state: 'watchful',
+        success: false
+      },
       keeper: {
-        dialogue: '*She looks at you, then away.* The dust is thick today.',
+        dialogue: "*She looks at you, then away.* The dust is thick today.",
         choices: [
           { text: 'Is something wrong?', type: 'gentle', skill_hint: 'EMPATHY' },
-          { text: "I'll come back later.", type: 'withdrawal', skill_hint: null },
-          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
+          { text: "[Leave]", type: 'withdrawal', skill_hint: null }
         ],
         voiceInterrupts: [
           {
@@ -239,44 +298,20 @@ export class AgentRunner {
         internal_state: 'guarded',
         success: false
       },
-      leader: {
-        dialogue: "*She turns back to her maps.* We'll speak later. There's work to be done.",
-        choices: [
-          { text: 'Can I help?', type: 'gentle', skill_hint: null },
-          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
-        ],
-        voiceInterrupts: [],
-        internal_state: 'busy',
-        success: false
-      },
-      healer: {
-        dialogue: "*She doesn't look up from her work.* Unless you're bleeding, I'm busy.",
-        choices: [
-          { text: "I'll wait.", type: 'gentle', skill_hint: null },
-          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
-        ],
-        voiceInterrupts: [],
-        internal_state: 'focused',
-        success: false
-      },
-      threat: {
-        dialogue: '*He stares at the horizon.* ...Still here? Brave or stupid.',
-        choices: [
-          { text: 'I want to understand.', type: 'gentle', skill_hint: 'EMPATHY' },
-          { text: '[Leave]', type: 'withdrawal', skill_hint: null }
-        ],
-        voiceInterrupts: [],
-        internal_state: 'distant',
-        success: false
-      },
       mirror: {
-        dialogue: '*They continue drawing spirals in the dust.*',
+        dialogue: "I... did I say something wrong?",
         choices: [
-          { text: 'What do the spirals mean?', type: 'gentle', skill_hint: 'GHOST' },
+          { text: "No, you're fine.", type: 'gentle', skill_hint: null },
           { text: '[Leave]', type: 'withdrawal', skill_hint: null }
         ],
-        voiceInterrupts: [],
-        internal_state: 'absorbed',
+        voiceInterrupts: [
+          {
+            voice: 'EMPATHY',
+            text: "He's desperate. For direction. For someone to follow.",
+            color: '#88ff88'
+          }
+        ],
+        internal_state: 'anxious',
         success: false
       }
     };
@@ -289,6 +324,15 @@ export class AgentRunner {
     if (this.agents[npcId]) {
       this.agents[npcId].resetConversation();
     }
+  }
+
+  // Reset all agents
+  resetAllAgents() {
+    for (const agent of Object.values(this.agents)) {
+      agent.resetConversation();
+    }
+    this.playerProfile.reset();
+    window.ASHFALL.playerProfile = this.playerProfile.getProfile();
   }
 
   // Utility

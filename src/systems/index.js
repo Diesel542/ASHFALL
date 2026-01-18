@@ -8,6 +8,7 @@ export { SkillSystem } from './skills.js';
 // LLM-driven NPC agents
 export { AgentRunner } from './AgentRunner.js';
 export { VoiceReactor } from './VoiceReactor.js';
+export { PlayerProfile } from './PlayerProfile.js';
 
 // Systems to build:
 // - [ ] Combat (avoidable, turn-based, action points)
