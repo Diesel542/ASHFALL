@@ -9,6 +9,7 @@ export class AgentBase {
     this.locationContext = null; // Set by AgentRunner
     this.relationshipManager = null; // Set by AgentRunner
     this.crossReferenceDialogue = null; // Set by AgentRunner
+    this.narrativeEngine = null; // Set by AgentRunner
   }
 
   // Set the location context (called by AgentRunner)
@@ -20,6 +21,11 @@ export class AgentBase {
   setRelationshipSystems(relationshipManager, crossReferenceDialogue) {
     this.relationshipManager = relationshipManager;
     this.crossReferenceDialogue = crossReferenceDialogue;
+  }
+
+  // Set narrative engine (called by AgentRunner)
+  setNarrativeEngine(narrativeEngine) {
+    this.narrativeEngine = narrativeEngine;
   }
 
   // Get relationship context (gossip about other NPCs)
@@ -44,6 +50,31 @@ export class AgentBase {
       return '';
     }
     return this.crossReferenceDialogue.getCrossReferenceContext(this.codex.id, mentionedNpc);
+  }
+
+  // Get narrative context (act state, revelation bounds, pressure level)
+  getNarrativeContext() {
+    if (!this.narrativeEngine) {
+      return '';
+    }
+
+    // Get current act info
+    const narrativeState = this.narrativeEngine.getNarrativePromptInjection();
+
+    // Get this NPC's arc bounds
+    const arcBounds = this.narrativeEngine.getNpcRevelationBounds(this.codex.id);
+
+    return `
+${narrativeState}
+
+YOUR NARRATIVE BOUNDS (${this.codex.name.toUpperCase()}):
+Current Gate: ${arcBounds.currentGate}
+What you CAN reveal: ${arcBounds.canReveal}
+What you CANNOT reveal yet: ${arcBounds.cannotRevealYet}
+
+GATE INSTRUCTION:
+${arcBounds.promptInjection}
+`;
   }
 
   // Get location-specific prompt injection
@@ -228,10 +259,14 @@ ${forbidden.map(f => `- ${f}`).join('\n')}
     const mentionedNpc = this.detectMentionedNpc(playerInput);
     const crossRefContext = this.getCrossReferenceContext(mentionedNpc);
 
+    // Narrative context - act state, revelation bounds
+    const narrativeContext = this.getNarrativeContext();
+
     return `${this.getIdentityPrompt()}
 
 ${this.getTonePrimer()}
 ${locationPrompt}
+${narrativeContext}
 
 ${this.getKnowledgePrompt(flags)}
 ${forbiddenSection}
@@ -268,11 +303,15 @@ ${this.getResponseFormat()}`;
     // Relationship context - what this NPC thinks of others
     const relationshipContext = this.getRelationshipContext();
 
+    // Narrative context - act state, revelation bounds
+    const narrativeContext = this.getNarrativeContext();
+
     // First meeting
     return `${this.getIdentityPrompt()}
 
 ${this.getTonePrimer()}
 ${locationPrompt}
+${narrativeContext}
 
 ${this.getKnowledgePrompt(flags)}
 ${relationshipContext}

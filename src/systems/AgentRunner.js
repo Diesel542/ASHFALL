@@ -23,6 +23,10 @@ import { CURIE_GUARDRAILS } from '../config/curieGuardrails.js';
 import { RelationshipManager } from './RelationshipManager.js';
 import { CrossReferenceDialogue } from './CrossReferenceDialogue.js';
 
+// Narrative systems
+import { NarrativeEngine } from './NarrativeEngine.js';
+import { ACT_TRIGGER_EVENTS } from '../data/actTriggers.js';
+
 export class AgentRunner {
   constructor() {
     this.agents = createAgentsSync();
@@ -47,13 +51,17 @@ export class AgentRunner {
     this.relationshipManager = new RelationshipManager();
     this.crossReferenceDialogue = new CrossReferenceDialogue(this.relationshipManager);
 
+    // Initialize narrative engine
+    this.narrativeEngine = new NarrativeEngine();
+
     // Pass location context to voice reactor for location-based voice bonuses
     this.voiceReactor.setLocationContext(this.locationContext);
 
-    // Pass location and relationship context to all agents
+    // Pass location, relationship, and narrative context to all agents
     for (const agent of Object.values(this.agents)) {
       agent.setLocationContext(this.locationContext);
       agent.setRelationshipSystems(this.relationshipManager, this.crossReferenceDialogue);
+      agent.setNarrativeEngine(this.narrativeEngine);
     }
 
     // Make systems globally accessible
@@ -63,6 +71,7 @@ export class AgentRunner {
       window.ASHFALL.curie = this.curie.getStateSummary();
       window.ASHFALL.relationshipManager = this.relationshipManager;
       window.ASHFALL.crossReferenceDialogue = this.crossReferenceDialogue;
+      window.ASHFALL.narrativeEngine = this.narrativeEngine;
     }
   }
 
@@ -202,6 +211,9 @@ export class AgentRunner {
       // UPDATE CURIE STATE based on conversation
       this.updateCurieFromConversation(validated, npcId);
 
+      // UPDATE NARRATIVE STATE based on conversation
+      this.updateNarrativeFromConversation(validated, npcId);
+
       // Get voice reactions using the agent's hooks
       let voiceReactions = await this.voiceReactor.getReactions(
         agent,
@@ -254,7 +266,8 @@ export class AgentRunner {
       // Get location-specific data for response
       const currentLocation = this.getCurrentLocation();
 
-      // Build response with Curie data
+      // Build response with Curie and narrative data
+      const narrativeState = this.narrativeEngine.getState();
       const result = {
         dialogue: validated.dialogue,
         choices: validated.player_choices,
@@ -268,6 +281,13 @@ export class AgentRunner {
         },
         internal_state: validated.internal_state,
         curie: this.curie.getStateSummary(),
+        narrative: {
+          act: narrativeState.currentAct,
+          actName: narrativeState.actInfo.name,
+          tension: narrativeState.tension,
+          tensionDescription: narrativeState.tensionDescription,
+          endingPath: narrativeState.endingInfo.name
+        },
         endgamePath: this.endgameCalculator.calculatePath({
           voiceBalances: window.ASHFALL?.player?.skills,
           flags: flags,
@@ -746,5 +766,192 @@ export class AgentRunner {
   // Get the dominant feeling one NPC has toward another
   getDominantFeeling(fromNpc, toNpc) {
     return this.relationshipManager.getDominantFeeling(fromNpc, toNpc);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // NARRATIVE ENGINE INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  // Get narrative engine for direct access
+  getNarrativeEngine() {
+    return this.narrativeEngine;
+  }
+
+  // Get current act info
+  getCurrentAct() {
+    return this.narrativeEngine.getCurrentActInfo();
+  }
+
+  // Get current tension level
+  getTension() {
+    return this.narrativeEngine.getTension();
+  }
+
+  // Adjust tension (from conversation events)
+  adjustTension(delta, source) {
+    this.narrativeEngine.adjustTension(delta, source);
+    this.checkActTriggers();
+  }
+
+  // Get NPC's revelation bounds
+  getNpcRevelationBounds(npcId) {
+    return this.narrativeEngine.getNpcRevelationBounds(npcId);
+  }
+
+  // Check if NPC gate should unlock
+  checkNpcGateUnlock(npcId) {
+    const gameState = {
+      relationships: window.ASHFALL?.relationships,
+      flags: window.ASHFALL?.flags,
+      curieActivity: this.curie.state.activity,
+      conversationCounts: window.ASHFALL?.conversationCounts
+    };
+
+    return this.narrativeEngine.checkGateUnlock(npcId, gameState);
+  }
+
+  // Update voice alignment from player choices
+  updateVoiceAlignment(voiceName, delta) {
+    this.narrativeEngine.updateVoiceAlignment(voiceName, delta);
+  }
+
+  // Get dominant voice alignment
+  getDominantVoice() {
+    return this.narrativeEngine.getDominantVoice();
+  }
+
+  // Get current ending path info
+  getCurrentEndingPath() {
+    return this.narrativeEngine.getEndingInfo();
+  }
+
+  // Lock the ending (point of no return)
+  lockEnding() {
+    this.narrativeEngine.lockEnding();
+  }
+
+  // Advance a day in the narrative
+  advanceDay() {
+    this.narrativeEngine.advanceDay();
+    this.checkActTriggers();
+  }
+
+  // Check if any act triggers are available
+  checkActTriggers() {
+    const gameState = {
+      tension: this.narrativeEngine.getTension(),
+      currentAct: this.narrativeEngine.state.currentAct,
+      daysElapsed: this.narrativeEngine.getDaysElapsed(),
+      curieActivity: this.curie.state.activity,
+      flags: window.ASHFALL?.flags,
+      conversationCounts: window.ASHFALL?.conversationCounts,
+      npcArcs: this.narrativeEngine.state.npcArcs,
+      dominantVoice: this.narrativeEngine.getDominantVoice().voice
+    };
+
+    const availableTriggers = ACT_TRIGGER_EVENTS.getAvailableTriggers(gameState);
+
+    if (availableTriggers.length > 0) {
+      // Return the first available trigger (could be randomized)
+      return availableTriggers[0];
+    }
+
+    return null;
+  }
+
+  // Execute an act trigger event
+  executeActTrigger(trigger) {
+    const result = ACT_TRIGGER_EVENTS.executeTrigger(trigger);
+
+    // Apply aftermath effects
+    if (result.aftermath) {
+      if (result.aftermath.tension) {
+        this.narrativeEngine.adjustTension(result.aftermath.tension, trigger.id);
+      }
+
+      if (result.aftermath.curieActivity) {
+        if (typeof result.aftermath.curieActivity === 'number') {
+          if (result.aftermath.curieActivity > 0.5) {
+            // Absolute value
+            this.curie.state.activity = result.aftermath.curieActivity;
+          } else {
+            // Delta value
+            this.curie.state.activity = Math.min(1, this.curie.state.activity + result.aftermath.curieActivity);
+          }
+        }
+      }
+
+      if (result.aftermath.flags) {
+        for (const flag of result.aftermath.flags) {
+          window.ASHFALL?.setFlag(flag);
+        }
+      }
+
+      if (result.aftermath.npcGateProgress) {
+        for (const [npcId, gateLevel] of Object.entries(result.aftermath.npcGateProgress)) {
+          while (this.narrativeEngine.getNpcGateLevel(npcId) < gateLevel) {
+            this.narrativeEngine.advanceGate(npcId);
+          }
+        }
+      }
+
+      if (result.aftermath.unlockAllGates) {
+        // Accelerate all NPC gates in Act 3
+        for (const npcId of ['mara', 'jonas', 'rask', 'edda', 'kale']) {
+          this.narrativeEngine.advanceGate(npcId);
+        }
+      }
+    }
+
+    // Set trigger flag to prevent re-triggering
+    window.ASHFALL?.setFlag(result.flagToSet);
+
+    // Check for act transition
+    if (trigger.id.includes('act1') || result.aftermath?.flags?.includes('denial_breaks')) {
+      this.narrativeEngine.triggerAct1to2();
+    }
+
+    if (trigger.id.includes('act2') || result.aftermath?.flags?.includes('act3_begun')) {
+      this.narrativeEngine.triggerAct2to3();
+    }
+
+    return result;
+  }
+
+  // Get narrative state summary
+  getNarrativeState() {
+    return this.narrativeEngine.getState();
+  }
+
+  // Get recent narrative events
+  getRecentNarrativeEvents(count = 10) {
+    return this.narrativeEngine.getRecentEvents(count);
+  }
+
+  // Reset narrative state
+  resetNarrative() {
+    this.narrativeEngine.reset();
+    if (window.ASHFALL) {
+      window.ASHFALL.narrativeEngine = this.narrativeEngine;
+    }
+  }
+
+  // Update narrative from conversation outcomes
+  updateNarrativeFromConversation(response, npcId) {
+    // Adjust tension based on conversation
+    if (response.relationship_delta < -5) {
+      this.adjustTension(5, 'confrontation');
+    }
+
+    if (response.internal_state?.includes('reveal') ||
+        response.internal_state?.includes('confession')) {
+      this.adjustTension(3, 'revelation');
+    }
+
+    // Track voice alignment from player choice types
+    // (This would be called with the actual choice made)
+
+    // Check for NPC gate unlocks
+    this.checkNpcGateUnlock(npcId);
   }
 }
