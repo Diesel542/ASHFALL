@@ -149,6 +149,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   createPortraitPlaceholders() {
+    console.log('[BootScene] Creating portrait placeholders...');
+
     // NPC colors for portrait backgrounds
     const npcColors = {
       mara: 0x8b4513, // Saddle brown - leader
@@ -225,44 +227,64 @@ export class BootScene extends Phaser.Scene {
       graphics.fillRect(8, 8, width - 16, height - 16);
 
       // Add character initial circle
-      const initial = npc.charAt(0).toUpperCase();
       graphics.fillStyle(0xe8dcc8, 0.9);
       graphics.fillCircle(width / 2, height / 2 - 10, 30);
 
-      // Generate texture
+      // Draw initial letter using graphics (simpler than text overlay)
+      const initial = npc.charAt(0).toUpperCase();
+      graphics.fillStyle(0x2d2a26, 1);
+      // Draw a simple letter shape based on initial
+      this.drawInitialLetter(graphics, initial, width / 2, height / 2 - 10);
+
+      // Generate texture (only once, no overlay needed)
       graphics.generateTexture(name, width, height);
       graphics.destroy();
-
-      // Add text overlay for initial (using a separate texture with text)
-      this.createInitialOverlay(name, initial, width, height);
     });
+
+    console.log('[BootScene] Portrait placeholders created');
   }
 
-  createInitialOverlay(baseName, initial, width, height) {
-    // Create a render texture to combine graphics with text
-    const rt = this.make.renderTexture({ x: 0, y: 0, width, height, add: false });
-
-    // Draw the base portrait
-    rt.draw(baseName, 0, 0);
-
-    // Add text for the initial
-    const text = this.add.text(width / 2, height / 2 - 10, initial, {
-      fontFamily: 'Oswald, sans-serif',
-      fontSize: '32px',
-      color: '#2d2a26',
-      fontStyle: 'bold'
-    });
-    text.setOrigin(0.5);
-
-    // Draw text onto render texture
-    rt.draw(text, 0, 0);
-
-    // Save as the final portrait texture (overwrite)
-    rt.saveTexture(baseName);
-
-    // Clean up
-    text.destroy();
-    rt.destroy();
+  drawInitialLetter(graphics, letter, cx, cy) {
+    // Simple block letter drawing for each NPC initial
+    const size = 16;
+    switch (letter) {
+      case 'M': // Mara
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx + size - 4, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size, 4);
+        graphics.fillRect(cx, cy - size, size, 4);
+        graphics.fillRect(cx - 4, cy - size + 8, 8, 4);
+        break;
+      case 'J': // Jonas
+        graphics.fillRect(cx - size, cy - size, size * 2, 4);
+        graphics.fillRect(cx + 4, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy + size - 8, size + 8, 4);
+        graphics.fillRect(cx - size, cy + 4, 4, size - 4);
+        break;
+      case 'R': // Rask
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size + 4, 4);
+        graphics.fillRect(cx - size, cy - 2, size + 4, 4);
+        graphics.fillRect(cx + 4, cy - size, 4, size);
+        graphics.fillRect(cx, cy + 2, 4, size - 4);
+        graphics.fillRect(cx + 4, cy + 6, 4, size - 6);
+        break;
+      case 'E': // Edda
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size * 2, 4);
+        graphics.fillRect(cx - size, cy - 2, size + 4, 4);
+        graphics.fillRect(cx - size, cy + size - 4, size * 2, 4);
+        break;
+      case 'K': // Kale
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size + 4, cy - 2, 4, 4);
+        graphics.fillRect(cx - size + 8, cy - 6, 4, 4);
+        graphics.fillRect(cx - size + 12, cy - 10, 4, 4);
+        graphics.fillRect(cx - size + 8, cy + 2, 4, 4);
+        graphics.fillRect(cx - size + 12, cy + 6, 4, 4);
+        graphics.fillRect(cx - size + 16, cy + 10, 4, 4);
+        break;
+    }
   }
 
   blendColors(base, tint) {
@@ -283,11 +305,15 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    console.log('[BootScene] create() called - starting delay before transition');
+
     // Short delay then start opening scene
     this.time.delayedCall(1500, () => {
+      console.log('[BootScene] Delay complete - starting fade out');
       this.cameras.main.fadeOut(500, 26, 23, 20);
 
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        console.log('[BootScene] Fade complete - transitioning to OpeningScene');
         this.scene.start('OpeningScene');
       });
     });

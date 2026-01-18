@@ -34,14 +34,19 @@ export class OpeningScene extends Phaser.Scene {
   }
 
   create() {
+    console.log('[OpeningScene] create() called');
+
     // Initialize game systems
     this.initializeSystems();
+    console.log('[OpeningScene] Systems initialized');
 
     // Create UI containers
     this.createUIContainers();
+    console.log('[OpeningScene] UI containers created');
 
     // Start the sequence
     this.beginEstablishingShot();
+    console.log('[OpeningScene] beginEstablishingShot() started');
   }
 
   initializeSystems() {
@@ -129,6 +134,7 @@ export class OpeningScene extends Phaser.Scene {
   // ═══════════════════════════════════════
 
   beginEstablishingShot() {
+    console.log('[OpeningScene] beginEstablishingShot - setting phase to establishing');
     this.state.phase = 'establishing';
 
     // Black background
@@ -150,7 +156,9 @@ export class OpeningScene extends Phaser.Scene {
       delay: data.timing[i]
     }));
 
+    console.log('[OpeningScene] Starting environmental sequence with', texts.length, 'texts');
     this.displayEnvironmentalSequence(texts, () => {
+      console.log('[OpeningScene] Environmental sequence complete');
       this.time.delayedCall(2000, () => {
         this.triggerFirstVoices();
       });
@@ -214,6 +222,7 @@ export class OpeningScene extends Phaser.Scene {
   // ═══════════════════════════════════════
 
   triggerFirstVoices() {
+    console.log('[OpeningScene] triggerFirstVoices - starting voice phase');
     this.state.phase = 'voices';
     this.state.voicesActivated = true;
 
@@ -505,12 +514,14 @@ export class OpeningScene extends Phaser.Scene {
   // ═══════════════════════════════════════
 
   beginSettlementEntry() {
+    console.log('[OpeningScene] beginSettlementEntry - transitioning to SettlementScene');
     this.state.phase = 'enter';
 
     // Transition to settlement view
     this.cameras.main.fadeOut(500, 0, 0, 0);
 
     this.time.delayedCall(600, () => {
+      console.log('[OpeningScene] Fade complete, starting SettlementScene');
       // Set completion flags
       window.ASHFALL.setFlag('opening_complete');
       window.ASHFALL.setFlag('voices_activated');
