@@ -19,6 +19,10 @@ import { NpcResonance } from './NpcResonance.js';
 import { EndgameCalculator } from './EndgameCalculator.js';
 import { CURIE_GUARDRAILS } from '../config/curieGuardrails.js';
 
+// Relationship systems
+import { RelationshipManager } from './RelationshipManager.js';
+import { CrossReferenceDialogue } from './CrossReferenceDialogue.js';
+
 export class AgentRunner {
   constructor() {
     this.agents = createAgentsSync();
@@ -39,19 +43,26 @@ export class AgentRunner {
     this.npcResonance = new NpcResonance(this.curie);
     this.endgameCalculator = new EndgameCalculator(this.curie);
 
+    // Initialize relationship systems
+    this.relationshipManager = new RelationshipManager();
+    this.crossReferenceDialogue = new CrossReferenceDialogue(this.relationshipManager);
+
     // Pass location context to voice reactor for location-based voice bonuses
     this.voiceReactor.setLocationContext(this.locationContext);
 
-    // Pass location context to all agents
+    // Pass location and relationship context to all agents
     for (const agent of Object.values(this.agents)) {
       agent.setLocationContext(this.locationContext);
+      agent.setRelationshipSystems(this.relationshipManager, this.crossReferenceDialogue);
     }
 
-    // Make player profile globally accessible for Kale's mirroring
+    // Make systems globally accessible
     if (window.ASHFALL) {
       window.ASHFALL.playerProfile = this.playerProfile.getProfile();
       window.ASHFALL.currentLocation = this.locationContext.currentLocation;
       window.ASHFALL.curie = this.curie.getStateSummary();
+      window.ASHFALL.relationshipManager = this.relationshipManager;
+      window.ASHFALL.crossReferenceDialogue = this.crossReferenceDialogue;
     }
   }
 
@@ -390,11 +401,41 @@ export class AgentRunner {
       window.ASHFALL.adjustRelationship(npcId, response.relationship_delta);
     }
 
-    // Set flags
+    // Set flags and check for relationship events
     for (const flag of response.flags_to_set) {
       if (typeof flag === 'string' && flag.length > 0) {
         window.ASHFALL.setFlag(flag);
+
+        // Check if this flag triggers any NPC-to-NPC relationship events
+        this.checkRelationshipEventTrigger(flag, npcId);
       }
+    }
+  }
+
+  // Check if a flag triggers NPC-to-NPC relationship shifts
+  checkRelationshipEventTrigger(flag, currentNpc) {
+    // Map of flags to relationship events
+    const flagEventMap = {
+      'jonas_treated_patient': 'jonas_healed_someone',
+      'jonas_healed': 'jonas_healed_someone',
+      'rask_violence': 'rask_violence_triggered',
+      'rask_attacked': 'rask_violence_triggered',
+      'rask_protected': 'rask_protected_settlement',
+      'mara_secret_revealed': 'mara_secret_exposed',
+      'mara_lie_exposed': 'mara_secret_exposed',
+      'edda_truth': 'edda_spoke_truth',
+      'edda_revealed': 'edda_spoke_truth',
+      'kale_identity_found': 'kale_found_identity',
+      'kale_remembered': 'kale_found_identity',
+      'shaft_discussed': 'shaft_mentioned_in_conversation',
+      'shaft_singing': 'shaft_mentioned_in_conversation',
+      'shared_secret': 'shared_secret_revealed',
+      'betrayal_discovered': 'betrayal_discovered'
+    };
+
+    const eventName = flagEventMap[flag];
+    if (eventName) {
+      this.applyRelationshipEvent(eventName);
     }
   }
 
@@ -662,5 +703,48 @@ export class AgentRunner {
     if (window.ASHFALL) {
       window.ASHFALL.curie = this.curie.getStateSummary();
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // RELATIONSHIP SYSTEM INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  // Apply a relationship event (e.g., 'jonas_healed_someone')
+  applyRelationshipEvent(eventName) {
+    const results = this.relationshipManager.applyEvent(eventName);
+    if (results.length > 0) {
+      console.log(`Relationship event '${eventName}' applied:`, results);
+    }
+    return results;
+  }
+
+  // Get what one NPC thinks of another
+  getNpcImpression(speakingNpc, aboutNpc) {
+    return this.crossReferenceDialogue.getImpression(speakingNpc, aboutNpc);
+  }
+
+  // Get all impressions one NPC has
+  getAllNpcImpressions(npcId) {
+    return this.crossReferenceDialogue.getAllImpressions(npcId);
+  }
+
+  // Check if player input mentions another NPC
+  detectCrossReference(playerInput) {
+    return this.crossReferenceDialogue.detectCrossReference(playerInput);
+  }
+
+  // Get the relationship manager for direct access
+  getRelationshipManager() {
+    return this.relationshipManager;
+  }
+
+  // Get current NPC-to-NPC relationship state
+  getNpcRelationshipState(npc1, npc2) {
+    return this.relationshipManager.getPerception(npc1, npc2);
+  }
+
+  // Get the dominant feeling one NPC has toward another
+  getDominantFeeling(fromNpc, toNpc) {
+    return this.relationshipManager.getDominantFeeling(fromNpc, toNpc);
   }
 }

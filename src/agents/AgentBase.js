@@ -7,11 +7,43 @@ export class AgentBase {
     this.conversationHistory = [];
     this.currentStress = 30; // 0-100
     this.locationContext = null; // Set by AgentRunner
+    this.relationshipManager = null; // Set by AgentRunner
+    this.crossReferenceDialogue = null; // Set by AgentRunner
   }
 
   // Set the location context (called by AgentRunner)
   setLocationContext(locationContext) {
     this.locationContext = locationContext;
+  }
+
+  // Set relationship systems (called by AgentRunner)
+  setRelationshipSystems(relationshipManager, crossReferenceDialogue) {
+    this.relationshipManager = relationshipManager;
+    this.crossReferenceDialogue = crossReferenceDialogue;
+  }
+
+  // Get relationship context (gossip about other NPCs)
+  getRelationshipContext() {
+    if (!this.crossReferenceDialogue) {
+      return '';
+    }
+    return this.crossReferenceDialogue.getGossipPrompt(this.codex.id);
+  }
+
+  // Detect if player is asking about another NPC
+  detectMentionedNpc(playerInput) {
+    if (!this.crossReferenceDialogue) {
+      return null;
+    }
+    return this.crossReferenceDialogue.detectCrossReference(playerInput);
+  }
+
+  // Get cross-reference context when player asks about another NPC
+  getCrossReferenceContext(mentionedNpc) {
+    if (!this.crossReferenceDialogue || !mentionedNpc) {
+      return '';
+    }
+    return this.crossReferenceDialogue.getCrossReferenceContext(this.codex.id, mentionedNpc);
   }
 
   // Get location-specific prompt injection
@@ -189,6 +221,13 @@ ${forbidden.map(f => `- ${f}`).join('\n')}
       ? '\n(You want to end this conversation or move elsewhere. Show discomfort.)'
       : '';
 
+    // Relationship context - what this NPC thinks of others
+    const relationshipContext = this.getRelationshipContext();
+
+    // Cross-reference detection - is player asking about another NPC?
+    const mentionedNpc = this.detectMentionedNpc(playerInput);
+    const crossRefContext = this.getCrossReferenceContext(mentionedNpc);
+
     return `${this.getIdentityPrompt()}
 
 ${this.getTonePrimer()}
@@ -196,6 +235,8 @@ ${locationPrompt}
 
 ${this.getKnowledgePrompt(flags)}
 ${forbiddenSection}
+${relationshipContext}
+${crossRefContext}
 
 CURRENT STATE:
 - Stress: ${effectiveStress}/100 (${this.getStressDescription()})
@@ -224,6 +265,9 @@ ${this.getResponseFormat()}`;
     const locationStress = this.getLocationStressModifier();
     const effectiveStress = Math.max(0, Math.min(100, this.currentStress + locationStress));
 
+    // Relationship context - what this NPC thinks of others
+    const relationshipContext = this.getRelationshipContext();
+
     // First meeting
     return `${this.getIdentityPrompt()}
 
@@ -231,6 +275,7 @@ ${this.getTonePrimer()}
 ${locationPrompt}
 
 ${this.getKnowledgePrompt(flags)}
+${relationshipContext}
 
 CURRENT STATE:
 - Stress: ${effectiveStress}/100 (${this.getStressDescription()})
