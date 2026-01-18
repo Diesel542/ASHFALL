@@ -6,6 +6,37 @@ export class AgentBase {
     this.codex = codex;
     this.conversationHistory = [];
     this.currentStress = 30; // 0-100
+    this.locationContext = null; // Set by AgentRunner
+  }
+
+  // Set the location context (called by AgentRunner)
+  setLocationContext(locationContext) {
+    this.locationContext = locationContext;
+  }
+
+  // Get location-specific prompt injection
+  getLocationPrompt() {
+    if (!this.locationContext) {
+      return '';
+    }
+    return this.locationContext.getLocationPrompt(this.codex.id);
+  }
+
+  // Get location-based stress modifier
+  getLocationStressModifier() {
+    if (!this.locationContext) {
+      return 0;
+    }
+    const modifiers = this.locationContext.getEmotionalModifiers();
+    return modifiers.stressModifier || 0;
+  }
+
+  // Check if this NPC wants to leave the current location
+  wantsToLeaveLocation() {
+    if (!this.locationContext) {
+      return false;
+    }
+    return this.locationContext.wantsToLeave(this.codex.id);
   }
 
   // Must be implemented by each agent
@@ -147,16 +178,28 @@ ${forbidden.map(f => `- ${f}`).join('\n')}
       ? `CONVERSATION HISTORY:\n${history}`
       : '(First exchange)';
 
+    // Location context injection
+    const locationPrompt = this.getLocationPrompt();
+    const locationStress = this.getLocationStressModifier();
+    const effectiveStress = Math.max(0, Math.min(100, this.currentStress + locationStress));
+
+    // Check if NPC wants to leave this location
+    const wantsToLeave = this.wantsToLeaveLocation();
+    const leaveHint = wantsToLeave
+      ? '\n(You want to end this conversation or move elsewhere. Show discomfort.)'
+      : '';
+
     return `${this.getIdentityPrompt()}
 
 ${this.getTonePrimer()}
+${locationPrompt}
 
 ${this.getKnowledgePrompt(flags)}
 ${forbiddenSection}
 
 CURRENT STATE:
-- Stress: ${this.currentStress}/100 (${this.getStressDescription()})
-- Relationship: ${this.getRelationship()}/100 (${this.getRelationshipDescription()})
+- Stress: ${effectiveStress}/100 (${this.getStressDescription()})
+- Relationship: ${this.getRelationship()}/100 (${this.getRelationshipDescription()})${leaveHint}
 
 ${historySection}
 
@@ -176,19 +219,26 @@ ${this.getResponseFormat()}`;
       return this.buildFullPrompt("*approaches again*", flags);
     }
 
+    // Location context injection
+    const locationPrompt = this.getLocationPrompt();
+    const locationStress = this.getLocationStressModifier();
+    const effectiveStress = Math.max(0, Math.min(100, this.currentStress + locationStress));
+
     // First meeting
     return `${this.getIdentityPrompt()}
 
 ${this.getTonePrimer()}
+${locationPrompt}
 
 ${this.getKnowledgePrompt(flags)}
 
 CURRENT STATE:
-- Stress: ${this.currentStress}/100 (${this.getStressDescription()})
+- Stress: ${effectiveStress}/100 (${this.getStressDescription()})
 - Relationship: ${this.getRelationship()}/100 (${this.getRelationshipDescription()})
 
 The player approaches you for the first time. Generate an opening line that:
 - Establishes your character immediately
+- Reflects your feelings about THIS LOCATION
 - Hints at mystery without revealing anything
 - Invites conversation while maintaining your characteristic distance/tone
 

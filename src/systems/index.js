@@ -16,6 +16,10 @@ export { WeatherSystem } from './WeatherSystem.js';
 export { EnvironmentalText } from './EnvironmentalText.js';
 export { VoiceTones } from './VoiceTones.js';
 
+// Location and navigation systems
+export { LocationContext } from './LocationContext.js';
+export { NavigationalSemantics } from './NavigationalSemantics.js';
+
 // Systems to build:
 // - [ ] Combat (avoidable, turn-based, action points)
 // - [ ] Inventory (items with weight, both physical and narrative)

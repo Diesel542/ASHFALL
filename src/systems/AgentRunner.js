@@ -7,6 +7,8 @@ import { PlayerProfile } from './PlayerProfile.js';
 import { ToneValidator } from './ToneValidator.js';
 import { WeatherSystem } from './WeatherSystem.js';
 import { EnvironmentalText } from './EnvironmentalText.js';
+import { LocationContext } from './LocationContext.js';
+import { NavigationalSemantics } from './NavigationalSemantics.js';
 
 export class AgentRunner {
   constructor() {
@@ -16,12 +18,59 @@ export class AgentRunner {
     this.toneValidator = new ToneValidator();
     this.weatherSystem = new WeatherSystem();
     this.environmentalText = new EnvironmentalText();
+    this.locationContext = new LocationContext();
+    this.navigationSemantics = new NavigationalSemantics();
     this.apiEndpoint = 'https://api.anthropic.com/v1/messages';
+
+    // Pass location context to voice reactor for location-based voice bonuses
+    this.voiceReactor.setLocationContext(this.locationContext);
+
+    // Pass location context to all agents
+    for (const agent of Object.values(this.agents)) {
+      agent.setLocationContext(this.locationContext);
+    }
 
     // Make player profile globally accessible for Kale's mirroring
     if (window.ASHFALL) {
       window.ASHFALL.playerProfile = this.playerProfile.getProfile();
+      window.ASHFALL.currentLocation = this.locationContext.currentLocation;
     }
+  }
+
+  // Set the current location (affects all subsequent conversations)
+  setLocation(locationId) {
+    const success = this.locationContext.setLocation(locationId);
+    if (success && window.ASHFALL) {
+      window.ASHFALL.currentLocation = locationId;
+    }
+    return success;
+  }
+
+  // Get current location data
+  getCurrentLocation() {
+    return this.locationContext.getCurrentLocation();
+  }
+
+  // Get all available locations
+  getAllLocations() {
+    return this.locationContext.getAllLocationIds();
+  }
+
+  // Get directions from current location to another
+  getDirectionsTo(toLocation) {
+    const fromLocation = this.locationContext.currentLocation;
+    return this.navigationSemantics.getDirections(fromLocation, toLocation);
+  }
+
+  // Get NPC-flavored directions
+  getNpcDirections(npcId, toLocation) {
+    const fromLocation = this.locationContext.currentLocation;
+    return this.navigationSemantics.generateNpcDirections(fromLocation, toLocation, npcId);
+  }
+
+  // Get a contextual landmark reference
+  getLandmarkReference() {
+    return this.navigationSemantics.getLandmarkReference();
   }
 
   // Get agent for an NPC
@@ -75,6 +124,11 @@ export class AgentRunner {
       // Use tone-corrected dialogue
       response.dialogue = toneCheck.dialogue;
 
+      // NAVIGATION CORRECTION - Replace compass directions with landmarks
+      if (this.navigationSemantics.containsForbiddenNavigation(response.dialogue)) {
+        response.dialogue = this.navigationSemantics.correctNavigationLanguage(response.dialogue);
+      }
+
       // NPC-specific voice check
       const voiceCheck = this.toneValidator.validateNpcVoice(response.dialogue, npcId);
       if (!voiceCheck.valid) {
@@ -120,11 +174,19 @@ export class AgentRunner {
         flags
       );
 
-      // Add ambient text based on weather (30% chance)
+      // Add ambient text based on weather or location (30% chance)
       let ambientText = null;
       if (Math.random() < 0.3) {
-        ambientText = this.weatherSystem.getAmbientText();
+        // 50/50 chance between weather ambient and location ambient
+        if (Math.random() < 0.5) {
+          ambientText = this.weatherSystem.getAmbientText();
+        } else {
+          ambientText = this.locationContext.getAmbientDetail();
+        }
       }
+
+      // Get location-specific data for response
+      const currentLocation = this.getCurrentLocation();
 
       return {
         dialogue: validated.dialogue,
@@ -132,6 +194,11 @@ export class AgentRunner {
         voiceInterrupts: voiceReactions,
         ambientText: ambientText,
         weather: this.weatherSystem.getCurrentWeather(),
+        location: {
+          id: this.locationContext.currentLocation,
+          name: currentLocation.name,
+          emotionalEffect: currentLocation.emotionalField.effect
+        },
         internal_state: validated.internal_state,
         success: true
       };

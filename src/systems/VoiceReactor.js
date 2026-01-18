@@ -21,6 +21,22 @@ export class VoiceReactor {
         personality: "Memory. Trauma. The past that speaks. Reminds you who you were—whether you want to remember or not."
       }
     };
+
+    // Location context for voice bonuses
+    this.locationContext = null;
+  }
+
+  // Set the location context (called by AgentRunner)
+  setLocationContext(locationContext) {
+    this.locationContext = locationContext;
+  }
+
+  // Get location-based voice bonuses
+  getLocationVoiceBonuses() {
+    if (!this.locationContext) {
+      return {};
+    }
+    return this.locationContext.getVoiceBonuses();
   }
 
   // Get voice reactions using the agent's voice hooks
@@ -84,6 +100,14 @@ export class VoiceReactor {
     };
 
     let threshold = thresholds[npcId]?.[voiceName] || 5;
+
+    // Apply location-based voice bonuses
+    // Higher bonus = lower threshold = easier to trigger
+    const locationBonuses = this.getLocationVoiceBonuses();
+    const locationBonus = locationBonuses[voiceName] || 0;
+    // Convert bonus (0-40) to threshold reduction (0-4)
+    const thresholdReduction = Math.floor(locationBonus / 10);
+    threshold -= thresholdReduction;
 
     // Lower thresholds if player has relevant flags
     if (voiceName === 'GHOST' && (flags.has('heard_the_hum') || flags.has('saw_spiral'))) {
