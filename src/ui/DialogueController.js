@@ -292,7 +292,7 @@ export class DialogueController {
     const greeting = greetings[npcId]?.[level] || { text: '*They look at you.*', emotion: 'neutral' };
 
     // Add voice reactions for first meeting
-    if (!context.flags.includes(`met_${npcId}`)) {
+    if (!context.flags.has(`met_${npcId}`)) {
       greeting.voices = this.getFirstMeetingVoices(npcId);
     }
 
