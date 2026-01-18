@@ -10,7 +10,7 @@ Violence is optional. Choices bleed. The voices in your head don't always agree.
 
 ## The Game
 
-ASHFALL is an isometric RPG where every conversation matters. NPCs are driven by Claude AI, responding dynamically to your words while staying true to their trauma, secrets, and relationships. Four internal voices—LOGIC, INSTINCT, EMPATHY, and GHOST—comment on everything, pulling you in different directions.
+ASHFALL is an isometric RPG where every conversation matters. NPCs are driven by LLM AI (OpenAI GPT-4 or Anthropic Claude), responding dynamically to your words while staying true to their trauma, secrets, and relationships. Four internal voices—LOGIC, INSTINCT, EMPATHY, and GHOST—comment on everything, pulling you in different directions.
 
 The story unfolds across three acts, building toward one of five endings based on your choices, relationships, and which voice you've fed the most.
 
@@ -30,7 +30,8 @@ Five fully-realized characters with LLM-driven dialogue:
 | **Kale** | Mirror | Identity formed from everyone else |
 
 Each NPC has:
-- **Arc Gates** (A-E): Progressive revelation of secrets
+- **Arc Gates** (0-4): Progressive revelation of secrets
+- **Mind Codex**: Complete psychological profile for LLM
 - **Stress System**: Affects dialogue tone and stability
 - **Relationship Tracking**: With player and other NPCs
 - **Forbidden Topics**: Secrets gated behind narrative progress
@@ -51,6 +52,38 @@ The AI buried beneath the settlement:
 - **Tremor Events**: Physical manifestations of awakening
 - **Ghost Override**: Curie speaks through the GHOST voice
 - **NPC Resonance**: Some NPCs are more susceptible
+
+### Game State Manager
+Central nervous system connecting all game systems:
+- **Single Source of Truth**: All state in one place
+- **Event-Driven Architecture**: Systems communicate via EventBus
+- **Automatic Transitions**: Act progression, NPC gates, ending calculation
+- **State Export/Import**: Full serialization for save/load
+
+### Dialogue System
+LLM-powered conversation engine:
+- **Tone Primer**: Enforces ASHFALL's sparse, weighted dialogue style
+- **NPC Codexes**: Full psychological profiles per character
+- **Arc Gates**: Controls what NPCs can reveal based on progression
+- **Voice Reactions**: Internal voices respond to NPC dialogue
+- **Conversation Memory**: Maintains context within sessions
+
+### UI System
+Complete Phaser 3 interface:
+- **Dialogue Box**: Typewriter effect with punctuation pauses
+- **Voice Panel**: Staggered display of internal voice reactions
+- **Choice Panel**: Voice-tagged options with keyboard/mouse navigation
+- **HUD**: Day, time, hum intensity display
+- **Location Panel**: Current location and available destinations
+- **Transitions**: Fades, tremors, ghost visual effects
+
+### Save/Load System
+Persistence with localStorage:
+- **5 Save Slots**: Auto-save, quick save, 3 manual slots
+- **Auto-Save**: Every 5 minutes
+- **Quick Save/Load**: F5 / F9
+- **Version Compatibility**: Prevents loading incompatible saves
+- **Continue Support**: Tracks most recent save
 
 ### Narrative Engine
 Three-act structure with dynamic progression:
@@ -101,11 +134,12 @@ All quests are validated against fundamental rules:
 
 ## Tech Stack
 
-- **Engine:** Phaser.js
+- **Engine:** Phaser 3
 - **Language:** JavaScript (ES6+)
 - **Build:** Vite
-- **AI:** Anthropic Claude API
-- **Style:** Isometric pixel art
+- **AI:** OpenAI GPT-4 (primary) / Anthropic Claude (supported)
+- **Storage:** localStorage for saves
+- **Style:** Isometric with programmatic placeholders
 
 ---
 
@@ -115,18 +149,56 @@ All quests are validated against fundamental rules:
 src/
 ├── agents/           # NPC agent classes (Mara, Jonas, Rask, Edda, Kale)
 ├── config/           # API config, tone bible, Curie guardrails
-├── data/             # Relationships, endings, triggers, scene data
-├── entities/         # Curie-Δ entity
-├── scenes/           # Phaser scenes (dialogue, opening)
-└── systems/          # Core systems
-    ├── AgentRunner.js        # Orchestrates all systems
-    ├── NarrativeEngine.js    # Act structure, gates, endings
-    ├── QuestArchetypes.js    # 8 quest templates
-    ├── RelationshipManager.js # NPC-to-NPC dynamics
-    ├── VoiceReactor.js       # Internal voice responses
-    ├── LocationContext.js    # World locations
-    ├── WeatherSystem.js      # Environmental mood
-    └── ...
+├── core/             # Central game management
+│   ├── GameState.js         # Initial state definition
+│   ├── EventBus.js          # Event system with 30+ event types
+│   ├── GameStateManager.js  # State mutations and coordination
+│   └── GameManager.js       # Public API singleton
+├── data/             # Game data
+│   ├── relationships.js     # NPC relationship matrix
+│   ├── locations.js         # 9 settlement locations
+│   ├── npcData.js          # NPC display info
+│   ├── endings.js          # 5 ending configurations
+│   └── openingScene.js     # Opening sequence data
+├── dialogue/         # LLM dialogue system
+│   ├── DialogueEngine.js    # OpenAI conversation handler
+│   ├── VoiceSystem.js       # Internal voice generation
+│   ├── tonePrimer.js        # Style enforcement
+│   ├── npcCodexes.js        # NPC psychological profiles
+│   ├── arcGates.js          # Revelation control
+│   └── relationships.js     # Dialogue relationship context
+├── entities/         # Game entities
+│   └── Curie.js             # Curie-Δ entity
+├── scenes/           # Phaser scenes
+│   ├── BootScene.js         # Asset loading
+│   ├── OpeningScene.js      # Opening sequence
+│   ├── SettlementScene.js   # Main gameplay
+│   └── EndingScene.js       # Ending display
+├── systems/          # Core systems
+│   ├── SaveManager.js       # Save/load operations
+│   ├── AgentRunner.js       # Orchestrates all systems
+│   ├── NarrativeEngine.js   # Act structure, gates, endings
+│   ├── QuestArchetypes.js   # 8 quest templates
+│   ├── RelationshipManager.js # NPC-to-NPC dynamics
+│   ├── VoiceReactor.js      # Internal voice responses
+│   ├── LocationContext.js   # World locations
+│   └── WeatherSystem.js     # Environmental mood
+├── ui/               # UI components
+│   ├── UIConstants.js       # Colors, fonts, dimensions
+│   ├── UIManager.js         # Main coordinator
+│   ├── DialogueBox.js       # NPC dialogue display
+│   ├── VoicePanel.js        # Internal voice display
+│   ├── ChoicePanel.js       # Player choices
+│   ├── HUD.js               # Top bar info
+│   ├── LocationPanel.js     # Location display
+│   ├── Transitions.js       # Visual effects
+│   ├── DialogueController.js # Conversation flow
+│   └── SaveLoadMenu.js      # Save/load UI
+├── world/            # World systems
+│   ├── Settlement.js        # Map and locations
+│   └── PlayerController.js  # Player movement
+├── config.js         # Phaser configuration
+└── main.js           # Entry point
 ```
 
 ---
@@ -144,6 +216,25 @@ npm run dev
 npm run build
 ```
 
+### Environment Setup
+
+Create a `.env` file with your API key:
+```
+OPENAI_API_KEY=your_key_here
+```
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| **F5** | Quick Save |
+| **F9** | Quick Load |
+| **ESC** | Save/Load Menu |
+| **1-9** | Location shortcuts |
+| **↑/↓** | Navigate choices |
+| **Enter** | Confirm choice |
+| **Space** | Advance dialogue |
+
 ---
 
 ## The Five Endings
@@ -155,6 +246,19 @@ npm run build
 | **Humanized** | EMPATHY | Allowed connection |
 | **Transcendence** | GHOST | Merged, transformed |
 | **Balanced** | None dominant | Negotiated coexistence |
+
+---
+
+## Scene Flow
+
+```
+BootScene → OpeningScene → SettlementScene → EndingScene
+                ↓
+         [Rask encounter]
+         [Voice activation]
+         [Settlement glimpses]
+         [First tremor]
+```
 
 ---
 
@@ -176,5 +280,7 @@ npm run build
 **Logos** — Systems. Architecture. The structure that holds.
 
 ---
+
+*"Small lives. Heavy truths. The earth remembers."*
 
 *Built by three minds across two architectures and one human heart.*
