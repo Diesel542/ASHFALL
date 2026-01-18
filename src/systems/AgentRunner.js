@@ -27,6 +27,12 @@ import { CrossReferenceDialogue } from './CrossReferenceDialogue.js';
 import { NarrativeEngine } from './NarrativeEngine.js';
 import { ACT_TRIGGER_EVENTS } from '../data/actTriggers.js';
 
+// Quest systems
+import { QuestArchetypeSystem } from './QuestArchetypes.js';
+import { QuestValidator } from './QuestValidator.js';
+import { QuestRequirementsChecker } from './QuestRequirements.js';
+import { QuestPromptGenerator } from './QuestPromptGenerator.js';
+
 export class AgentRunner {
   constructor() {
     this.agents = createAgentsSync();
@@ -54,6 +60,12 @@ export class AgentRunner {
     // Initialize narrative engine
     this.narrativeEngine = new NarrativeEngine();
 
+    // Initialize quest systems
+    this.questSystem = new QuestArchetypeSystem();
+    this.questValidator = new QuestValidator();
+    this.questRequirements = new QuestRequirementsChecker();
+    this.questPromptGenerator = new QuestPromptGenerator();
+
     // Pass location context to voice reactor for location-based voice bonuses
     this.voiceReactor.setLocationContext(this.locationContext);
 
@@ -72,6 +84,7 @@ export class AgentRunner {
       window.ASHFALL.relationshipManager = this.relationshipManager;
       window.ASHFALL.crossReferenceDialogue = this.crossReferenceDialogue;
       window.ASHFALL.narrativeEngine = this.narrativeEngine;
+      window.ASHFALL.questSystem = this.questSystem;
     }
   }
 
@@ -953,5 +966,232 @@ export class AgentRunner {
 
     // Check for NPC gate unlocks
     this.checkNpcGateUnlock(npcId);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // QUEST SYSTEM INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  // Get the quest archetype system
+  getQuestSystem() {
+    return this.questSystem;
+  }
+
+  // Get an archetype by ID
+  getQuestArchetype(archetypeId) {
+    return this.questSystem.getArchetype(archetypeId);
+  }
+
+  // Get available quest archetypes based on current game state
+  getAvailableQuestArchetypes() {
+    const gameState = this.getQuestGameState();
+    return this.questSystem.getAvailableArchetypes(gameState);
+  }
+
+  // Build game state object for quest system
+  getQuestGameState() {
+    return {
+      currentAct: this.narrativeEngine.state.currentAct,
+      tension: this.narrativeEngine.getTension(),
+      curieActivity: this.curie.state.activity,
+      flags: window.ASHFALL?.flags || new Set(),
+      relationships: this.getRelationshipsObject(),
+      npcGates: this.getNpcGatesObject(),
+      npcStress: this.getNpcStressObject(),
+      resources: window.ASHFALL?.resources || {},
+      weather: this.weatherSystem.getCurrentWeather(),
+      voiceAlignment: this.narrativeEngine.state.voiceAlignment,
+      disabledNpcs: []
+    };
+  }
+
+  // Convert relationships Map to object for quest system
+  getRelationshipsObject() {
+    const relationships = {};
+    const relMap = window.ASHFALL?.relationships;
+    if (relMap) {
+      for (const [npc, value] of relMap) {
+        relationships[npc] = value;
+      }
+    }
+    return relationships;
+  }
+
+  // Get NPC gates as object
+  getNpcGatesObject() {
+    const gates = {};
+    const npcArcs = this.narrativeEngine.state.npcArcs;
+    if (npcArcs) {
+      for (const [npc, arc] of Object.entries(npcArcs)) {
+        gates[npc] = arc.currentGate;
+      }
+    }
+    return gates;
+  }
+
+  // Get NPC stress levels as object
+  getNpcStressObject() {
+    const stress = {};
+    for (const [npcId, agent] of Object.entries(this.agents)) {
+      stress[npcId] = agent.currentStress || 30;
+    }
+    return stress;
+  }
+
+  // Generate a quest from an archetype
+  generateQuest(archetypeId, context = {}) {
+    const gameState = this.getQuestGameState();
+
+    // Check requirements
+    const reqCheck = this.questRequirements.check(archetypeId, context, gameState);
+    if (!reqCheck.met) {
+      console.warn(`Quest requirements not met for ${archetypeId}:`, reqCheck.missing);
+      return null;
+    }
+
+    // Generate the quest
+    const quest = this.questSystem.generateQuest(archetypeId, context);
+    if (!quest) {
+      return null;
+    }
+
+    // Validate the quest
+    const validation = this.questValidator.validate(quest, gameState);
+    if (!validation.valid) {
+      console.warn(`Quest validation failed for ${archetypeId}:`, validation.violations);
+      return null;
+    }
+
+    return quest;
+  }
+
+  // Generate quest prompt for LLM
+  generateQuestPrompt(archetypeId, context = {}) {
+    const archetype = this.questSystem.getArchetype(archetypeId);
+    if (!archetype) return null;
+
+    const gameState = this.getQuestGameState();
+
+    // Get NPC codex if relevant
+    let npcCodex = null;
+    if (context.npc && this.agents[context.npc]) {
+      npcCodex = this.agents[context.npc].codex;
+    }
+
+    return this.questPromptGenerator.generateCompleteQuestPrompt(
+      archetype,
+      context,
+      gameState,
+      npcCodex
+    );
+  }
+
+  // Complete a quest with a specific outcome
+  completeQuest(questId, outcomeId) {
+    const result = this.questSystem.completeQuest(questId, outcomeId);
+    if (!result) return null;
+
+    // Apply effects
+    const effects = result.effects;
+
+    // Apply relationship changes
+    for (const [npc, delta] of Object.entries(effects.relationshipChanges)) {
+      window.ASHFALL?.adjustRelationship(npc, delta);
+    }
+
+    // Apply tension changes
+    if (effects.tensionDelta) {
+      this.adjustTension(effects.tensionDelta, `quest_${questId}`);
+    }
+
+    // Set flags
+    for (const flag of effects.flagsToSet) {
+      window.ASHFALL?.setFlag(flag);
+    }
+
+    // Apply voice score changes
+    for (const [voice, delta] of Object.entries(effects.voiceScoreChanges)) {
+      this.updateVoiceAlignment(voice, delta);
+    }
+
+    return result;
+  }
+
+  // Get active quests
+  getActiveQuests() {
+    return this.questSystem.getActiveQuests();
+  }
+
+  // Get completed quests
+  getCompletedQuests() {
+    return this.questSystem.getCompletedQuests();
+  }
+
+  // Get a quest by ID
+  getQuest(questId) {
+    return this.questSystem.getQuestById(questId);
+  }
+
+  // Validate LLM-generated quest content
+  validateQuestContent(content) {
+    const gameState = this.getQuestGameState();
+    return this.questValidator.validateLLMContent(content, gameState);
+  }
+
+  // Get quest rules for prompt injection
+  getQuestRulesForPrompt() {
+    return this.questValidator.getRulesForPrompt();
+  }
+
+  // Get available quests for current game state
+  getAvailableQuests() {
+    const gameState = this.getQuestGameState();
+    const contexts = this.questRequirements.generatePotentialContexts(gameState);
+    return this.questRequirements.getAvailableQuests(gameState, contexts);
+  }
+
+  // Suggest a quest based on current game state
+  suggestQuest() {
+    const available = this.getAvailableQuests();
+    if (available.length === 0) return null;
+
+    // Prioritize based on current act and tension
+    const gameState = this.getQuestGameState();
+
+    // In high tension, prefer intervention or shaft's shadow
+    if (gameState.tension > 70) {
+      const highTensionQuest = available.find(q =>
+        q.archetypeId === 'intervention' || q.archetypeId === 'shafts_shadow'
+      );
+      if (highTensionQuest) return highTensionQuest;
+    }
+
+    // In Act 2+, introduce memory echoes
+    if (gameState.currentAct >= 2) {
+      const memoryEcho = available.find(q => q.archetypeId === 'memory_echo');
+      if (memoryEcho) return memoryEcho;
+    }
+
+    // Otherwise, pick based on dominant voice
+    const dominant = this.getDominantVoice();
+    const voiceQuestMap = {
+      LOGIC: 'investigation',
+      INSTINCT: 'watchtower',
+      EMPATHY: 'small_mercy',
+      GHOST: 'memory_echo'
+    };
+
+    const voiceQuest = available.find(q =>
+      q.archetypeId === voiceQuestMap[dominant.voice]
+    );
+    if (voiceQuest) return voiceQuest;
+
+    // Return first available
+    return available[0];
+  }
+
+  // Reset quest system
+  resetQuests() {
+    this.questSystem = new QuestArchetypeSystem();
   }
 }
