@@ -18,11 +18,14 @@ import { NPC_RELATIONSHIPS } from './relationships.js';
 
 export class DialogueEngine {
   constructor(config = {}) {
-    // Support both environment variable and passed config
+    // Support multiple sources for API key (Vite uses import.meta.env with VITE_ prefix)
     const apiKey = config.apiKey ||
+                   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENAI_API_KEY) ||
                    (typeof process !== 'undefined' && process.env?.OPENAI_API_KEY) ||
                    (typeof window !== 'undefined' && window.ASHFALL_CONFIG?.openaiApiKey) ||
                    (typeof localStorage !== 'undefined' && localStorage.getItem('openai_api_key'));
+
+    console.log('[DialogueEngine] API key configured:', !!apiKey);
 
     if (apiKey) {
       this.openai = new OpenAI({
@@ -31,7 +34,8 @@ export class DialogueEngine {
       });
     } else {
       this.openai = null;
-      console.warn('DialogueEngine: No OpenAI API key configured');
+      console.warn('[DialogueEngine] No OpenAI API key configured. Using fallback responses.');
+      console.warn('[DialogueEngine] Set VITE_OPENAI_API_KEY in .env file or pass apiKey in config');
     }
 
     this.model = config.model || 'gpt-4-turbo-preview';

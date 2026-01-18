@@ -43,23 +43,23 @@ export class UIManager {
     // Dialogue box (bottom center)
     this.dialogueBox = new DialogueBox(this.scene, {
       x: width / 2,
-      y: height - 120,
+      y: height - 140,
       width: 700,
-      height: 200
+      height: 180
     });
     this.container.add(this.dialogueBox.container);
 
-    // Voice panel (above dialogue box)
+    // Voice panel (well above dialogue box to avoid overlap)
     this.voicePanel = new VoicePanel(this.scene, {
       x: width / 2,
-      y: height - 280
+      y: height - 320
     });
     this.container.add(this.voicePanel.container);
 
-    // Choice panel (inside dialogue box area)
+    // Choice panel (above the dialogue box, not overlapping)
     this.choicePanel = new ChoicePanel(this.scene, {
       x: width / 2,
-      y: height - 80
+      y: height - 250  // Above dialogue box (which is at height-140)
     });
     this.container.add(this.choicePanel.container);
 
@@ -178,6 +178,9 @@ export class UIManager {
    */
   async showChoices(choices) {
     this.state.choicesVisible = true;
+
+    // Hide continue indicator since choices are now available
+    this.dialogueBox.hideContinueIndicator();
 
     return new Promise((resolve) => {
       this.choicePanel.show(choices, (selectedChoice) => {

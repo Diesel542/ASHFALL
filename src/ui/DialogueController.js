@@ -72,6 +72,15 @@ export class DialogueController {
     const npcId = this.currentConversation.npc;
     const result = await this.game.talkTo(npcId, choice.text);
 
+    // Handle null result (dialogue system not initialized)
+    if (!result) {
+      console.warn('[DialogueController] talkTo returned null - using fallback');
+      const fallbackResponse = this.getLocalFallback(npcId);
+      await this.ui.showDialogue(fallbackResponse, 'neutral');
+      await this.showPlayerChoices(npcId);
+      return;
+    }
+
     if (result.success) {
       // Determine emotion from response
       const emotion = this.detectEmotion(result.response);
@@ -98,9 +107,24 @@ export class DialogueController {
       }
     } else {
       // Fallback on error
-      await this.ui.showDialogue(result.fallback);
+      const fallbackText = result.fallback || this.getLocalFallback(npcId);
+      await this.ui.showDialogue(fallbackText, 'neutral');
       await this.showPlayerChoices(npcId);
     }
+  }
+
+  /**
+   * Get a local fallback response when API is unavailable
+   */
+  getLocalFallback(npcId) {
+    const fallbacks = {
+      mara: "*She studies you for a long moment, then looks away.* We'll talk later. There's work to be done.",
+      jonas: "*He pauses, lost in thought.* I... sorry, what were you saying? My mind wandered.",
+      rask: "*He grunts.* Not now. Keep your distance.",
+      edda: "*Her eyes grow distant.* The words aren't ready yet. They'll come when they're meant to.",
+      kale: "*He shifts nervously.* I don't... I'm not sure what to say right now."
+    };
+    return fallbacks[npcId] || "*They seem distracted and don't respond.*";
   }
 
   /**
