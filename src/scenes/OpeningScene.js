@@ -44,9 +44,78 @@ export class OpeningScene extends Phaser.Scene {
     this.createUIContainers();
     console.log('[OpeningScene] UI containers created');
 
+    // Create skip intro hint and listener
+    this.createSkipIntro();
+
     // Start the sequence
     this.beginEstablishingShot();
     console.log('[OpeningScene] beginEstablishingShot() started');
+  }
+
+  createSkipIntro() {
+    // Skip intro hint text
+    this.skipHint = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height - 30,
+      'Press SPACE to skip intro',
+      {
+        fontFamily: 'IBM Plex Mono, monospace',
+        fontSize: '14px',
+        color: '#6b6358'
+      }
+    ).setOrigin(0.5).setAlpha(0.6);
+
+    // Pulse animation
+    this.tweens.add({
+      targets: this.skipHint,
+      alpha: { from: 0.3, to: 0.7 },
+      duration: 1500,
+      yoyo: true,
+      repeat: -1
+    });
+
+    // Space key listener
+    this.input.keyboard.once('keydown-SPACE', () => {
+      this.skipIntro();
+    });
+  }
+
+  skipIntro() {
+    console.log('[OpeningScene] Skipping intro...');
+
+    // Set default state for skipped intro
+    this.state.voicesActivated = true;
+    this.state.raskEncounterComplete = true;
+    this.state.dominantFirstImpression = 'silent'; // Default tone
+
+    // Set flags as if intro was completed
+    window.ASHFALL.setFlag('rask_met');
+    window.ASHFALL.setFlag('gate_passed');
+    window.ASHFALL.setFlag('first_impression_silent');
+    window.ASHFALL.setFlag('intro_skipped');
+
+    // Give small balanced voice scores
+    window.ASHFALL.voiceScores = {
+      LOGIC: 1,
+      INSTINCT: 1,
+      EMPATHY: 1,
+      GHOST: 1
+    };
+
+    // Fade to settlement
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.time.delayedCall(400, () => {
+      window.ASHFALL.setFlag('opening_complete');
+      window.ASHFALL.setFlag('voices_activated');
+
+      this.scene.start('SettlementScene', {
+        firstEntry: true,
+        playerTone: 'silent',
+        voiceScores: window.ASHFALL.voiceScores,
+        choices: [],
+        skipped: true
+      });
+    });
   }
 
   initializeSystems() {
