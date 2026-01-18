@@ -19,30 +19,11 @@ export class BootScene extends Phaser.Scene {
     this.createLoadingBar();
 
     // ═══════════════════════════════════════
-    // PORTRAITS
+    // PORTRAITS (generated as placeholders)
     // ═══════════════════════════════════════
 
-    const portraits = [
-      'mara_guarded',
-      'mara_commanding',
-      'mara_cracking',
-      'jonas_distant',
-      'jonas_pained',
-      'jonas_warmth',
-      'rask_watching',
-      'rask_warning',
-      'rask_softness',
-      'edda_cryptic',
-      'edda_frightened',
-      'edda_prophetic',
-      'kale_eager',
-      'kale_confused',
-      'kale_slipping'
-    ];
-
-    portraits.forEach((portrait) => {
-      this.load.image(portrait, `assets/portraits/${portrait}.png`);
-    });
+    // Portraits are now generated programmatically in createParticleTextures()
+    // to allow testing without actual image assets
 
     // ═══════════════════════════════════════
     // TILES (if using tilemap)
@@ -73,6 +54,9 @@ export class BootScene extends Phaser.Scene {
 
     // Create simple particle textures programmatically
     this.createParticleTextures();
+
+    // Create portrait placeholders
+    this.createPortraitPlaceholders();
   }
 
   createLoadingBar() {
@@ -164,12 +148,172 @@ export class BootScene extends Phaser.Scene {
     npcGraphics.destroy();
   }
 
+  createPortraitPlaceholders() {
+    console.log('[BootScene] Creating portrait placeholders...');
+
+    // NPC colors for portrait backgrounds
+    const npcColors = {
+      mara: 0x8b4513, // Saddle brown - leader
+      jonas: 0x4a6741, // Forest green - healer
+      rask: 0x5c4033, // Dark brown - enforcer
+      edda: 0x4a4a6a, // Muted purple - elder
+      kale: 0x6a5a4a // Taupe - mirror
+    };
+
+    // Mood tints (subtle color shifts)
+    const moodTints = {
+      // Mara
+      guarded: 0x000000,
+      commanding: 0x110000,
+      cracking: 0x001100,
+      // Jonas
+      distant: 0x000011,
+      pained: 0x110000,
+      warmth: 0x111100,
+      // Rask
+      watching: 0x000000,
+      warning: 0x110000,
+      softness: 0x001111,
+      // Edda
+      cryptic: 0x000011,
+      frightened: 0x110011,
+      prophetic: 0x111111,
+      // Kale
+      eager: 0x111100,
+      confused: 0x110011,
+      slipping: 0x001111
+    };
+
+    const portraits = [
+      { name: 'mara_guarded', npc: 'mara', mood: 'guarded' },
+      { name: 'mara_commanding', npc: 'mara', mood: 'commanding' },
+      { name: 'mara_cracking', npc: 'mara', mood: 'cracking' },
+      { name: 'jonas_distant', npc: 'jonas', mood: 'distant' },
+      { name: 'jonas_pained', npc: 'jonas', mood: 'pained' },
+      { name: 'jonas_warmth', npc: 'jonas', mood: 'warmth' },
+      { name: 'rask_watching', npc: 'rask', mood: 'watching' },
+      { name: 'rask_warning', npc: 'rask', mood: 'warning' },
+      { name: 'rask_softness', npc: 'rask', mood: 'softness' },
+      { name: 'edda_cryptic', npc: 'edda', mood: 'cryptic' },
+      { name: 'edda_frightened', npc: 'edda', mood: 'frightened' },
+      { name: 'edda_prophetic', npc: 'edda', mood: 'prophetic' },
+      { name: 'kale_eager', npc: 'kale', mood: 'eager' },
+      { name: 'kale_confused', npc: 'kale', mood: 'confused' },
+      { name: 'kale_slipping', npc: 'kale', mood: 'slipping' }
+    ];
+
+    // Portrait dimensions
+    const width = 128;
+    const height = 160;
+
+    portraits.forEach(({ name, npc, mood }) => {
+      const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+
+      // Background color with mood tint
+      const baseColor = npcColors[npc];
+      const tint = moodTints[mood];
+      const finalColor = this.blendColors(baseColor, tint);
+
+      // Fill background
+      graphics.fillStyle(finalColor, 1);
+      graphics.fillRect(0, 0, width, height);
+
+      // Add subtle border
+      graphics.lineStyle(2, 0x1a1714, 1);
+      graphics.strokeRect(1, 1, width - 2, height - 2);
+
+      // Add a darker inner rectangle for depth
+      graphics.fillStyle(0x000000, 0.2);
+      graphics.fillRect(8, 8, width - 16, height - 16);
+
+      // Add character initial circle
+      graphics.fillStyle(0xe8dcc8, 0.9);
+      graphics.fillCircle(width / 2, height / 2 - 10, 30);
+
+      // Draw initial letter using graphics (simpler than text overlay)
+      const initial = npc.charAt(0).toUpperCase();
+      graphics.fillStyle(0x2d2a26, 1);
+      // Draw a simple letter shape based on initial
+      this.drawInitialLetter(graphics, initial, width / 2, height / 2 - 10);
+
+      // Generate texture (only once, no overlay needed)
+      graphics.generateTexture(name, width, height);
+      graphics.destroy();
+    });
+
+    console.log('[BootScene] Portrait placeholders created');
+  }
+
+  drawInitialLetter(graphics, letter, cx, cy) {
+    // Simple block letter drawing for each NPC initial
+    const size = 16;
+    switch (letter) {
+      case 'M': // Mara
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx + size - 4, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size, 4);
+        graphics.fillRect(cx, cy - size, size, 4);
+        graphics.fillRect(cx - 4, cy - size + 8, 8, 4);
+        break;
+      case 'J': // Jonas
+        graphics.fillRect(cx - size, cy - size, size * 2, 4);
+        graphics.fillRect(cx + 4, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy + size - 8, size + 8, 4);
+        graphics.fillRect(cx - size, cy + 4, 4, size - 4);
+        break;
+      case 'R': // Rask
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size + 4, 4);
+        graphics.fillRect(cx - size, cy - 2, size + 4, 4);
+        graphics.fillRect(cx + 4, cy - size, 4, size);
+        graphics.fillRect(cx, cy + 2, 4, size - 4);
+        graphics.fillRect(cx + 4, cy + 6, 4, size - 6);
+        break;
+      case 'E': // Edda
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size, cy - size, size * 2, 4);
+        graphics.fillRect(cx - size, cy - 2, size + 4, 4);
+        graphics.fillRect(cx - size, cy + size - 4, size * 2, 4);
+        break;
+      case 'K': // Kale
+        graphics.fillRect(cx - size, cy - size, 4, size * 2);
+        graphics.fillRect(cx - size + 4, cy - 2, 4, 4);
+        graphics.fillRect(cx - size + 8, cy - 6, 4, 4);
+        graphics.fillRect(cx - size + 12, cy - 10, 4, 4);
+        graphics.fillRect(cx - size + 8, cy + 2, 4, 4);
+        graphics.fillRect(cx - size + 12, cy + 6, 4, 4);
+        graphics.fillRect(cx - size + 16, cy + 10, 4, 4);
+        break;
+    }
+  }
+
+  blendColors(base, tint) {
+    // Simple additive blend
+    const r1 = (base >> 16) & 0xff;
+    const g1 = (base >> 8) & 0xff;
+    const b1 = base & 0xff;
+
+    const r2 = (tint >> 16) & 0xff;
+    const g2 = (tint >> 8) & 0xff;
+    const b2 = tint & 0xff;
+
+    const r = Math.min(255, r1 + r2);
+    const g = Math.min(255, g1 + g2);
+    const b = Math.min(255, b1 + b2);
+
+    return (r << 16) | (g << 8) | b;
+  }
+
   create() {
+    console.log('[BootScene] create() called - starting delay before transition');
+
     // Short delay then start opening scene
     this.time.delayedCall(1500, () => {
+      console.log('[BootScene] Delay complete - starting fade out');
       this.cameras.main.fadeOut(500, 26, 23, 20);
 
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        console.log('[BootScene] Fade complete - transitioning to OpeningScene');
         this.scene.start('OpeningScene');
       });
     });
