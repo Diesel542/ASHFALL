@@ -20,6 +20,13 @@ export { VoiceTones } from './VoiceTones.js';
 export { LocationContext } from './LocationContext.js';
 export { NavigationalSemantics } from './NavigationalSemantics.js';
 
+// Curie-Δ systems (the thing beneath)
+export { HumSystem } from './HumSystem.js';
+export { TremorSystem } from './TremorSystem.js';
+export { GhostOverride } from './GhostOverride.js';
+export { NpcResonance } from './NpcResonance.js';
+export { EndgameCalculator } from './EndgameCalculator.js';
+
 // Systems to build:
 // - [ ] Combat (avoidable, turn-based, action points)
 // - [ ] Inventory (items with weight, both physical and narrative)

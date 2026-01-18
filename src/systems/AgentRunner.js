@@ -10,6 +10,15 @@ import { EnvironmentalText } from './EnvironmentalText.js';
 import { LocationContext } from './LocationContext.js';
 import { NavigationalSemantics } from './NavigationalSemantics.js';
 
+// Curie-Δ systems
+import { CurieEntity } from '../entities/Curie.js';
+import { HumSystem } from './HumSystem.js';
+import { TremorSystem } from './TremorSystem.js';
+import { GhostOverride } from './GhostOverride.js';
+import { NpcResonance } from './NpcResonance.js';
+import { EndgameCalculator } from './EndgameCalculator.js';
+import { CURIE_GUARDRAILS } from '../config/curieGuardrails.js';
+
 export class AgentRunner {
   constructor() {
     this.agents = createAgentsSync();
@@ -21,6 +30,14 @@ export class AgentRunner {
     this.locationContext = new LocationContext();
     this.navigationSemantics = new NavigationalSemantics();
     this.apiEndpoint = 'https://api.anthropic.com/v1/messages';
+
+    // Initialize Curie-Δ systems
+    this.curie = new CurieEntity();
+    this.humSystem = new HumSystem(this.curie);
+    this.tremorSystem = new TremorSystem(this.curie);
+    this.ghostOverride = new GhostOverride(this.curie);
+    this.npcResonance = new NpcResonance(this.curie);
+    this.endgameCalculator = new EndgameCalculator(this.curie);
 
     // Pass location context to voice reactor for location-based voice bonuses
     this.voiceReactor.setLocationContext(this.locationContext);
@@ -34,6 +51,7 @@ export class AgentRunner {
     if (window.ASHFALL) {
       window.ASHFALL.playerProfile = this.playerProfile.getProfile();
       window.ASHFALL.currentLocation = this.locationContext.currentLocation;
+      window.ASHFALL.curie = this.curie.getStateSummary();
     }
   }
 
@@ -129,6 +147,13 @@ export class AgentRunner {
         response.dialogue = this.navigationSemantics.correctNavigationLanguage(response.dialogue);
       }
 
+      // CURIE GUARDRAILS - Ensure secrets stay gated
+      const guardrailCheck = CURIE_GUARDRAILS.validate(response.dialogue, flags);
+      if (!guardrailCheck.valid) {
+        console.warn('Curie guardrail violations:', guardrailCheck.violations);
+        response.dialogue = CURIE_GUARDRAILS.autoCorrect(response.dialogue, flags);
+      }
+
       // NPC-specific voice check
       const voiceCheck = this.toneValidator.validateNpcVoice(response.dialogue, npcId);
       if (!voiceCheck.valid) {
@@ -163,8 +188,11 @@ export class AgentRunner {
       // Update weather based on conversation events
       this.updateWeatherFromConversation(validated, npcId);
 
+      // UPDATE CURIE STATE based on conversation
+      this.updateCurieFromConversation(validated, npcId);
+
       // Get voice reactions using the agent's hooks
-      const voiceReactions = await this.voiceReactor.getReactions(
+      let voiceReactions = await this.voiceReactor.getReactions(
         agent,
         validated.dialogue,
         {
@@ -174,11 +202,38 @@ export class AgentRunner {
         flags
       );
 
-      // Add ambient text based on weather or location (30% chance)
+      // Check for Curie-influenced GHOST override
+      const ghostOverrideLine = this.checkGhostOverride(voiceReactions);
+      if (ghostOverrideLine) {
+        // Replace or add Curie-influenced GHOST line
+        voiceReactions = voiceReactions.filter(v => v.voice !== 'GHOST');
+        voiceReactions.push(ghostOverrideLine);
+      }
+
+      // Check for NPC resonance effects
+      const resonanceReaction = this.npcResonance.getInstinctiveReaction(npcId);
+
+      // Check for tremors
+      const tremor = this.tremorSystem.update(
+        {
+          inDialogue: true,
+          dialogueEmotional: Math.abs(validated.relationship_delta) > 3,
+          flags: flags,
+          playerLocation: this.locationContext.currentLocation,
+          voiceConflict: this.calculateVoiceConflict(),
+          currentNpc: npcId
+        },
+        Date.now()
+      );
+
+      // Add ambient text based on weather, location, or hum (30% chance)
       let ambientText = null;
       if (Math.random() < 0.3) {
-        // 50/50 chance between weather ambient and location ambient
-        if (Math.random() < 0.5) {
+        const humText = this.humSystem.getAmbientText();
+        const rand = Math.random();
+        if (rand < 0.33 && humText) {
+          ambientText = humText;
+        } else if (rand < 0.66) {
           ambientText = this.weatherSystem.getAmbientText();
         } else {
           ambientText = this.locationContext.getAmbientDetail();
@@ -188,7 +243,8 @@ export class AgentRunner {
       // Get location-specific data for response
       const currentLocation = this.getCurrentLocation();
 
-      return {
+      // Build response with Curie data
+      const result = {
         dialogue: validated.dialogue,
         choices: validated.player_choices,
         voiceInterrupts: voiceReactions,
@@ -200,8 +256,34 @@ export class AgentRunner {
           emotionalEffect: currentLocation.emotionalField.effect
         },
         internal_state: validated.internal_state,
+        curie: this.curie.getStateSummary(),
+        endgamePath: this.endgameCalculator.calculatePath({
+          voiceBalances: window.ASHFALL?.player?.skills,
+          flags: flags,
+          relationships: window.ASHFALL?.relationships
+        }).leading,
         success: true
       };
+
+      // Add resonance reaction if present
+      if (resonanceReaction) {
+        result.resonanceEffect = resonanceReaction;
+      }
+
+      // Add tremor if one occurred
+      if (tremor) {
+        result.tremor = tremor;
+        if (tremor.setFlag) {
+          window.ASHFALL?.setFlag(tremor.setFlag);
+        }
+      }
+
+      // Update global Curie state
+      if (window.ASHFALL) {
+        window.ASHFALL.curie = this.curie.getStateSummary();
+      }
+
+      return result;
     } catch (error) {
       console.error('Agent conversation failed:', error);
       return this.getFallbackResponse(npcId);
@@ -485,5 +567,100 @@ export class AgentRunner {
   // Utility
   clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // CURIE-Δ INTEGRATION
+  // ═══════════════════════════════════════════════════════════════
+
+  // Update Curie state based on conversation events
+  updateCurieFromConversation(response, npcId) {
+    const gameState = {
+      flags: window.ASHFALL?.flags,
+      relationships: window.ASHFALL?.relationships,
+      playerProfile: this.playerProfile.getProfile(),
+      voiceBalances: window.ASHFALL?.player?.skills,
+      playerLocation: this.locationContext.currentLocation,
+      recentEmotionalSpike: Math.abs(response.relationship_delta) > 5
+    };
+
+    this.curie.update(gameState);
+
+    // Update hum based on current state
+    this.humSystem.update(this.locationContext.currentLocation, gameState);
+  }
+
+  // Check if GHOST voice should be overridden by Curie
+  checkGhostOverride(voiceReactions) {
+    if (!this.ghostOverride.shouldOverride()) {
+      return null;
+    }
+
+    // Generate Curie-influenced GHOST line
+    return this.ghostOverride.generateOverrideLine();
+  }
+
+  // Calculate voice conflict for tremor triggering
+  calculateVoiceConflict() {
+    const skills = window.ASHFALL?.player?.skills;
+    if (!skills) return 0;
+
+    const { LOGIC = 0, INSTINCT = 0, EMPATHY = 0, GHOST = 0 } = skills;
+    const values = [LOGIC, INSTINCT, EMPATHY, GHOST];
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+
+    // Higher conflict when voices are very unbalanced
+    return (max - min) / 100;
+  }
+
+  // Get NPC resonance prompt injection
+  getNpcResonanceInjection(npcId) {
+    return this.npcResonance.getPromptInjection(npcId);
+  }
+
+  // Get current hum state
+  getHumState() {
+    return this.humSystem.update(
+      this.locationContext.currentLocation,
+      { flags: window.ASHFALL?.flags }
+    );
+  }
+
+  // Get current ending path
+  getEndingPath() {
+    return this.endgameCalculator.calculatePath({
+      voiceBalances: window.ASHFALL?.player?.skills,
+      flags: window.ASHFALL?.flags,
+      relationships: window.ASHFALL?.relationships
+    });
+  }
+
+  // Get Curie entity for direct access
+  getCurie() {
+    return this.curie;
+  }
+
+  // Force a tremor (for scripted events)
+  forceTremor(intensity = 0.5) {
+    return this.tremorSystem.forceTremor(intensity);
+  }
+
+  // Get allowed Curie hints based on current flags
+  getAllowedCurieHints() {
+    return CURIE_GUARDRAILS.getAllowedHints(window.ASHFALL?.flags);
+  }
+
+  // Check if a Curie topic is unlocked
+  isCurieTopicUnlocked(topicKey) {
+    return CURIE_GUARDRAILS.isTopicUnlocked(topicKey, window.ASHFALL?.flags);
+  }
+
+  // Reset Curie state
+  resetCurie() {
+    this.curie.reset();
+    if (window.ASHFALL) {
+      window.ASHFALL.curie = this.curie.getStateSummary();
+    }
   }
 }
